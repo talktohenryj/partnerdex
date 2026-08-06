@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getConfig } from '../config.js';
 import { ADD_APP_CLICK_EVENT, LISTING_VIEW_EVENT } from '../bigquery/events.js';
+import { migrate as migrateDurable } from './migrate.js';
 import { SCHEMA_SQL } from './schema.js';
 
 export type Db = Database.Database;
@@ -19,8 +20,13 @@ export function getDb(): Db {
 
   const db = new Database(runtime.databasePath);
   db.pragma('busy_timeout = 5000');
+  // Disposable tables first (idempotent CREATE IF NOT EXISTS), then the column
+  // patches that IF NOT EXISTS cannot make, then durable Role-4 tables through
+  // the versioned runner — contacts cannot be rebuilt from the Partner API, so
+  // schema changes for them need a real version path.
   db.exec(SCHEMA_SQL);
   migrate(db);
+  migrateDurable(db);
 
   handle = db;
   return db;

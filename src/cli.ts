@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { ConfigError, getConfig } from './config.js';
+import { dumpContactsToFile, restoreContactsFromFile } from './contacts/dump.js';
 import { getDb } from './db/index.js';
 import { partnerQuery, PartnerApiError } from './partner/client.js';
 import { HEALTHCHECK_QUERY } from './partner/queries.js';
@@ -19,6 +20,10 @@ Usage:
   partnerdex serve               Start the API and dashboard
   partnerdex validate            Run the trust checks
   partnerdex query <metric> [--period=last_12_months] [--interval=month] [--asOf=YYYY-MM-DD]
+  partnerdex contacts:dump [--out=./contacts-dump.json]
+                                 Write contacts + suppressions to a JSON file
+  partnerdex contacts:restore --from=<dump.json>
+                                 Replace contacts tables from a dump (destructive)
 
 Metrics:
 ${listMetrics()
@@ -187,6 +192,37 @@ async function main(): Promise<void> {
         nocache: flags.nocache,
       });
       console.log(JSON.stringify(response, null, 2));
+      break;
+    }
+
+    case 'contacts:dump': {
+      // Ensure schema/migrations are applied before reading.
+      const db = getDb();
+      const out =
+        flags.out ??
+        `./contacts-dump-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      const { path: written, dump } = dumpContactsToFile(out, db);
+      console.log(
+        `Wrote ${dump.contacts.length} contact(s), ` +
+          `${dump.contact_shops.length} shop link(s), ` +
+          `${dump.contact_suppressions.length} suppression(s) → ${written}`,
+      );
+      break;
+    }
+
+    case 'contacts:restore': {
+      if (!flags.from) {
+        console.error('Usage: partnerdex contacts:restore --from=<dump.json>');
+        process.exitCode = 1;
+        break;
+      }
+      getDb();
+      const counts = restoreContactsFromFile(flags.from);
+      console.log(
+        `Restored ${counts.contacts} contact(s), ` +
+          `${counts.contact_shops} shop link(s), ` +
+          `${counts.contact_suppressions} suppression(s) from ${flags.from}`,
+      );
       break;
     }
 
