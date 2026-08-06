@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchCustomers, type CustomerStatus, type CustomerSummary } from '../api';
+import {
+  downloadCustomersCsv,
+  fetchCustomers,
+  type CustomerStatus,
+  type CustomerSummary,
+} from '../api';
 import { formatFullDate, formatValue } from '../format';
 
 /**
@@ -50,8 +55,26 @@ export function Customers({ appId }: { appId: string }) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const debounced = useDebounced(search, 250);
+
+  async function handleExport(): Promise<void> {
+    setExporting(true);
+    setExportError(null);
+    try {
+      await downloadCustomersCsv({
+        search: debounced,
+        sort,
+        appId,
+      });
+    } catch (cause) {
+      setExportError(cause instanceof Error ? cause.message : 'Export failed.');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // A new search starts at the beginning; keeping the offset would silently
   // show page four of a result set the reader has not seen page one of.
@@ -119,6 +142,19 @@ export function Customers({ appId }: { appId: string }) {
           </select>
         </div>
 
+        <div className="control">
+          <label htmlFor="customer-export">Export</label>
+          <button
+            id="customer-export"
+            type="button"
+            className="control-button"
+            onClick={() => void handleExport()}
+            disabled={exporting || total === 0 || loading}
+          >
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+        </div>
+
         <p className="control-note">
           {loading && rows.length === 0
             ? 'Searching…'
@@ -132,6 +168,13 @@ export function Customers({ appId }: { appId: string }) {
         <div className="notice error">
           <h2>Could not load customers</h2>
           <p>{error}</p>
+        </div>
+      ) : null}
+
+      {exportError ? (
+        <div className="notice error">
+          <h2>Could not export customers</h2>
+          <p>{exportError}</p>
         </div>
       ) : null}
 

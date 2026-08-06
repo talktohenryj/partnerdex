@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { getDb } from '../src/db/index.js';
 import { closeDb } from '../src/db/index.js';
-import { getCustomer, listCustomers } from '../src/customers/index.js';
+import { exportCustomersCsv, getCustomer, listCustomers } from '../src/customers/index.js';
 import { runMetric } from '../src/metrics/registry.js';
 import { rebuildDerivedTables } from '../src/sync/derive.js';
 import { APP_ID, resetEnvironment, seed } from './helpers.js';
@@ -515,6 +515,18 @@ describe('the customer read model', () => {
     const churned = listCustomers({ search: 's8.example' }).customers[0]!;
     assert.equal(churned.status, 'churned');
     assert.equal(churned.mrr, 0);
+  });
+
+  it('exports the filtered customer list as CSV', () => {
+    const csv = exportCustomersCsv({ search: 's7.example', sort: 'mrr' });
+    const lines = csv.trimEnd().split('\n');
+    assert.equal(
+      lines[0],
+      'merchant,domain,shop_id,status,mrr,currency,paid_to_date,apps,last_activity',
+    );
+    assert.equal(lines.length, 2);
+    assert.match(lines[1]!, /^Shop 7,s7\.example,7,Paying,75,/);
+    assert.match(lines[1]!, /,225,1,/);
   });
 
   it('opens a merchant with their plan, their money and their history', () => {

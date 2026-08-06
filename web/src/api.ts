@@ -284,6 +284,43 @@ export const fetchCustomers = (options: {
   return getJson<CustomerListResult>(`/api/customers?${params.toString()}`);
 };
 
+/** Download the filtered customer list as CSV (same filters as the table). */
+export async function downloadCustomersCsv(options: {
+  search?: string;
+  sort?: string;
+  appId?: string;
+}): Promise<void> {
+  const params = new URLSearchParams();
+  if (options.search) params.set('q', options.search);
+  if (options.sort) params.set('sort', options.sort);
+  if (options.appId) params.set('appIds', options.appId);
+  const url = `/api/customers/export?${params.toString()}`;
+  const response = await fetch(url);
+  if (response.status === 401) {
+    window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
+  }
+  if (!response.ok) {
+    let message = `Request failed with ${response.status}`;
+    try {
+      const body = (await response.json()) as { error?: string };
+      if (body.error) message = body.error;
+    } catch {
+      // Non-JSON error body; keep the status message.
+    }
+    throw new Error(message);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const match = /filename="([^"]+)"/.exec(disposition);
+  const filename = match?.[1] ?? 'partnerdex-customers.csv';
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(objectUrl);
+}
+
 export const fetchCustomer = (shopId: string, appId = ''): Promise<CustomerDetail> => {
   const params = new URLSearchParams();
   if (appId) params.set('appIds', appId);

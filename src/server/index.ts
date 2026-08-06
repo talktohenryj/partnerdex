@@ -3,7 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getConfig } from '../config.js';
-import { getCustomer, listCustomers, type CustomerSort } from '../customers/index.js';
+import {
+  exportCustomersCsv,
+  getCustomer,
+  listCustomers,
+  type CustomerSort,
+} from '../customers/index.js';
 import { getDb } from '../db/index.js';
 import { type RawMetricQuery } from '../metrics/context.js';
 import { listMetrics, runMetric } from '../metrics/registry.js';
@@ -199,6 +204,34 @@ export function createApp(): express.Express {
           appIds: appIds ? appIds.split(',').filter(Boolean) : [],
         }),
       );
+    } catch (error) {
+      sendError(response, error);
+    }
+  });
+
+  /**
+   * Full filtered customer list as CSV. Registered ahead of `:shopId` so
+   * "export" is never read as a shop id.
+   */
+  app.get('/api/customers/export', (request, response) => {
+    try {
+      const pick = (name: string): string | undefined => {
+        const value = request.query[name];
+        return typeof value === 'string' ? value : undefined;
+      };
+      const appIds = pick('appIds');
+      const csv = exportCustomersCsv({
+        search: pick('q') ?? '',
+        sort: (pick('sort') ?? 'mrr') as CustomerSort,
+        appIds: appIds ? appIds.split(',').filter(Boolean) : [],
+      });
+      const stamp = new Date().toISOString().slice(0, 10);
+      response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      response.setHeader(
+        'Content-Disposition',
+        `attachment; filename="partnerdex-customers-${stamp}.csv"`,
+      );
+      response.send(csv);
     } catch (error) {
       sendError(response, error);
     }

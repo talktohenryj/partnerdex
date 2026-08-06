@@ -472,7 +472,8 @@ h3,
 }
 
 .control select,
-.control input {
+.control input,
+.control-button {
   font: inherit;
   font-size: 13px;
   color: var(--text-primary);
@@ -485,8 +486,23 @@ h3,
   min-width: 150px;
 }
 
+.control-button {
+  cursor: pointer;
+  min-width: 0;
+}
+
+.control-button:hover:not(:disabled) {
+  background: var(--hover-wash);
+}
+
+.control-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .control select:focus-visible,
-.control input:focus-visible {
+.control input:focus-visible,
+.control-button:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 1px;
   border-color: var(--brand);
