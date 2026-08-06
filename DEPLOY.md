@@ -91,10 +91,49 @@ fly ssh console -C "node /app/dist/cli.js validate"
 ```
 
 ### Backups and Data Portability
-Since the SQLite database resides on a single physical disk, you should perform regular backups of the database file (`/data/partnerdex.db`). To download a local copy of your production database, run:
+Since the SQLite database resides on a single physical disk, you should perform regular backups of the database file (`/data/partnerdex.db`). Most tables are disposable (rebuildable from the Partner API), but **Role-4 tables are not** — `app_reviews`, notification channels/deliveries, and especially **`contacts` / `contact_shops` / `contact_suppressions`**. Once the Mantle import lands, that SQLite file holds the only copy of the send list.
+
+#### 1. Fly volume snapshots (primary)
+Scheduled snapshots of the `partnerdex_data` volume. Cadence and retention:
+
+| Setting | Recommendation |
+|---------|----------------|
+| Cadence | Daily (minimum); take an extra manual snapshot **immediately before** any contacts import or schema maintenance |
+| Retention | Keep at least 7 daily snapshots |
+
+```bash
+# Find the volume id
+fly volumes list
+
+# Manual snapshot (do this before contacts:import --commit)
+fly volumes snapshots create <volume-id>
+
+# List / restore
+fly volumes snapshots list <volume-id>
+# Restore = create a new volume from a snapshot, then attach it (see Fly docs)
+```
+
+Confirm scheduled snapshot settings for the volume in the Fly dashboard (or `fly volumes update`) so daily snapshots keep running without a manual step.
+
+#### 2. Full DB copy (off-box)
+To download a local copy of your production database:
 ```bash
 fly ssh sftp get /data/partnerdex.db ./partnerdex-backup.db
 ```
+
+#### 3. Contacts-only dump (portable Role-4 backup)
+Belt to the snapshot's braces — a JSON export of just the three contacts tables, safe to pull off the machine before destructive work and restore into an empty DB if the volume is lost:
+
+```bash
+# On the machine / via ssh
+fly ssh console -C "node /app/dist/cli.js contacts:dump --out=/data/contacts-dump.json"
+fly ssh sftp get /data/contacts-dump.json ./contacts-dump.json
+
+# Restore into a DB that already has the contacts schema (migration 1 applied)
+partnerdex contacts:restore --from=./contacts-dump.json
+```
+
+`contacts:restore` **replaces** the three tables wholesale — it is a round-trip restore, not a merge. Archive the raw Mantle Contacts CSV and `unsubscribed.csv` permanently (object storage) as the origin record, independent of PartnerDex.
 
 ### Resilient Redeploys
 During deployments, the running container stops and restarts, which may interrupt an active sync loop. This is completely safe; PartnerDex's synchronization logic is fully incremental, re-reading records from a 3-day overlap window prior to the last known watermark to catch late-arriving events.
