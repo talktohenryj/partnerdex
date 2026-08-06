@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { ConfigError, getConfig } from './config.js';
+import { formatDomainCoverage, reportDomainCoverage } from './contacts/coverage.js';
 import { dumpContactsToFile, restoreContactsFromFile } from './contacts/dump.js';
+import { formatImportSummary, importMantleContacts } from './contacts/import.js';
 import { getDb } from './db/index.js';
 import { partnerQuery, PartnerApiError } from './partner/client.js';
 import { HEALTHCHECK_QUERY } from './partner/queries.js';
@@ -24,6 +26,9 @@ Usage:
                                  Write contacts + suppressions to a JSON file
   partnerdex contacts:restore --from=<dump.json>
                                  Replace contacts tables from a dump (destructive)
+  partnerdex contacts:coverage   Check shops.myshopify_domain population (pre-import)
+  partnerdex contacts:import --from=<contacts.csv> --app-id=<id> [--suppression=<unsubscribed.csv>] [--commit]
+                                 Preview (default) or commit a Mantle contacts CSV
 
 Metrics:
 ${listMetrics()
@@ -223,6 +228,40 @@ async function main(): Promise<void> {
           `${counts.contact_shops} shop link(s), ` +
           `${counts.contact_suppressions} suppression(s) from ${flags.from}`,
       );
+      break;
+    }
+
+    case 'contacts:coverage': {
+      getDb();
+      console.log(formatDomainCoverage(reportDomainCoverage()));
+      break;
+    }
+
+    case 'contacts:import': {
+      const from = flags.from;
+      const appId = flags['app-id'] ?? flags.appId;
+      if (!from || !appId) {
+        console.error(
+          'Usage: partnerdex contacts:import --from=<contacts.csv> --app-id=<id> ' +
+            '[--suppression=<unsubscribed.csv>] [--commit]',
+        );
+        process.exitCode = 1;
+        break;
+      }
+      getDb();
+      const summary = importMantleContacts({
+        csvPath: from,
+        appId,
+        suppressionPath: flags.suppression,
+        commit: flags.commit === 'true',
+      });
+      console.log(formatImportSummary(summary));
+      if (!summary.committed) {
+        console.log(
+          '\nRe-run with --commit --suppression=<unsubscribed.csv> to write. ' +
+            'Take a volume snapshot first: fly volumes snapshots create <volume-id>',
+        );
+      }
       break;
     }
 

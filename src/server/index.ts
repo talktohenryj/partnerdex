@@ -20,6 +20,7 @@ import { buildReviewEvents } from '../appstore/events.js';
 import { resolveScopedAppIds } from '../sync/index.js';
 import { onSyncComplete, startSyncScheduler, syncStatus } from '../sync/scheduler.js';
 import { authRequired, authRouter, requireAuth } from './auth.js';
+import { contactsRouter } from './contacts.js';
 import { sendError } from './errors.js';
 import { notificationsRouter } from './notifications.js';
 import { listingsRouter } from './listings.js';
@@ -98,6 +99,10 @@ export function createApp(): express.Express {
   // Mounted ahead of the gate — one of its jobs is to tell an unauthenticated
   // dashboard that it needs to show a login form.
   app.use('/api/auth', authRouter());
+
+  // Machine-to-machine contacts ingest — bearer token, not the dashboard
+  // cookie. Must sit ahead of requireAuth so iziGift can POST without a session.
+  app.use('/api/contacts', contactsRouter());
 
   /*
    * Everything below reads the store, so everything below is gated. The static
