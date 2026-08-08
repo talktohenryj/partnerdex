@@ -47,7 +47,7 @@ export interface ImportSummary {
   };
 }
 
-/** Mantle Associated Customer Label → canonical role (from the iziGift import). */
+/** Mantle Associated Customer Label → canonical role. */
 export function mapMantleLabel(raw: string): { role: ContactRole; original: string } {
   const original = raw.trim();
   const key = original.toLowerCase();
@@ -100,7 +100,7 @@ export function importMantleContacts(options: ImportOptions): ImportSummary {
   if (options.commit && !options.suppressionPath) {
     throw new Error(
       'contacts:import --commit requires --suppression=<unsubscribed.csv>. ' +
-        'A missed opt-out is a CAN-SPAM problem — see Sprint 0.',
+        'A missed opt-out is a CAN-SPAM problem.',
     );
   }
 
@@ -284,7 +284,7 @@ export function formatImportSummary(summary: ImportSummary): string {
     for (const email of summary.unlinkedEmails) lines.push(`  ${email}`);
   } else if (summary.unlinkedEmails.length > 25) {
     lines.push(
-      `Unlinked emails: ${summary.unlinkedEmails.length} (kept; see Contacts page Unlinked filter in Sprint 4)`,
+      `Unlinked emails: ${summary.unlinkedEmails.length} (kept; no contact_shops row)`,
     );
   }
   return lines.join('\n');

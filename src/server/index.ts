@@ -101,7 +101,7 @@ export function createApp(): express.Express {
   app.use('/api/auth', authRouter());
 
   // Machine-to-machine contacts ingest — bearer token, not the dashboard
-  // cookie. Must sit ahead of requireAuth so iziGift can POST without a session.
+  // cookie. Must sit ahead of requireAuth so producers can POST without a session.
   app.use('/api/contacts', contactsRouter());
 
   /*

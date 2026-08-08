@@ -133,20 +133,20 @@ partnerdex contacts:restore --from=./contacts-dump.json
 `contacts:restore` **replaces** the three tables wholesale — it is a round-trip restore, not a merge. Archive the raw Mantle Contacts CSV and `unsubscribed.csv` permanently (object storage) as the origin record, independent of PartnerDex.
 
 #### 4. Mantle contacts import (one-time)
-After Sprint 2 is deployed and a volume snapshot exists:
+After deploy, and once a volume snapshot exists:
 
 ```bash
 # Read-only: is shops.myshopify_domain populated?
 fly ssh console -C "node /app/dist/cli.js contacts:coverage"
 
 # Preview (default — writes nothing)
-fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/mantle-contacts.csv --app-id=<iziGift-app-id>"
+fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/mantle-contacts.csv --app-id=<your-app-id>"
 
-# Commit — requires the validated unsubscribe list from Sprint 0
-fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/mantle-contacts.csv --app-id=<iziGift-app-id> --suppression=/data/unsubscribed.csv --commit"
+# Commit — requires a validated unsubscribe list
+fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/mantle-contacts.csv --app-id=<your-app-id> --suppression=/data/unsubscribed.csv --commit"
 ```
 
-Set `CONTACTS_INGEST_TOKEN` (Fly secret) before iziGift starts calling `POST /api/contacts/ingest` in Sprint 3.
+Set `CONTACTS_INGEST_TOKEN` (Fly secret) before any app producer starts calling `POST /api/contacts/ingest`.
 
 ### Resilient Redeploys
 During deployments, the running container stops and restarts, which may interrupt an active sync loop. This is completely safe; PartnerDex's synchronization logic is fully incremental, re-reading records from a 3-day overlap window prior to the last known watermark to catch late-arriving events.

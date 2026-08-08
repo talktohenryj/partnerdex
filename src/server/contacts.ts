@@ -11,7 +11,7 @@ import {
 import { sendError } from './errors.js';
 
 /**
- * Machine-to-machine ingest for app producers (iziGift in Sprint 3).
+ * Machine-to-machine ingest for app producers.
  *
  * Auth is a shared-secret bearer token (`CONTACTS_INGEST_TOKEN`), not the
  * dashboard password — that credential is for a human at a browser.

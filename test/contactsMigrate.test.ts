@@ -12,7 +12,7 @@ import { migrate, readUserVersion, type Migration } from '../src/db/migrate.js';
 import { resetEnvironment } from './helpers.js';
 
 /**
- * Sprint 1 acceptance: the migration runner must create the contacts tables,
+ * Migration runner acceptance: must create the contacts tables,
  * evolve them later (which CREATE TABLE IF NOT EXISTS cannot), and roll back a
  * failed migration without leaving a half-applied version. The dump CLI must
  * round-trip the three Role-4 tables.

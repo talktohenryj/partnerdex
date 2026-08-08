@@ -130,8 +130,8 @@ function dashboardPassword(): string | null {
  * Shared secret for POST /api/contacts/ingest (machine-to-machine).
  *
  * Separate from DASHBOARD_PASSWORD on purpose: that credential is for a human
- * at a browser; this one is what iziGift (and later apps) send as a bearer
- * token. Null disables the endpoint with 503.
+ * at a browser; this one is what app producers send as a bearer token. Null
+ * disables the endpoint with 503.
  */
 function contactsIngestToken(): string | null {
   const value = process.env.CONTACTS_INGEST_TOKEN?.trim() ?? '';
