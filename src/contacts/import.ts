@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import type { Db } from '../db/index.js';
 import { getDb } from '../db/index.js';
-import { column, parseCsv } from './csv.js';
+import { parseCsv } from './csv.js';
 import {
   assertAppInScope,
   normalizeDomain,
@@ -13,17 +13,25 @@ import {
 } from './upsert.js';
 
 /**
- * One-time Mantle Contacts CSV → PartnerDex contacts store.
+ * One-time contacts CSV → PartnerDex contacts store.
  *
  * Preview by default; `--commit` writes. Backfilled first/last seen stay NULL
- * (honest unknown). Suppression is a separate required pass when committing.
+ * (honest unknown). Opt-outs are a `suppressed` column on the same CSV.
  */
+
+/** Exact header names required in the contacts CSV (order does not matter). */
+export const CONTACTS_CSV_HEADERS = [
+  'email',
+  'first_name',
+  'last_name',
+  'myshopify_domain',
+  'role',
+  'suppressed',
+] as const;
 
 export interface ImportOptions {
   csvPath: string;
   appId: string;
-  /** Path to validated unsubscribed.csv (one email per line). Required for --commit. */
-  suppressionPath?: string;
   commit?: boolean;
   db?: Db;
 }
@@ -34,7 +42,7 @@ export interface ImportSummary {
   uniqueEmails: number;
   contactsWritten: number;
   matchCounts: Record<MatchMethod, number>;
-  labelMapping: Record<string, { role: ContactRole; count: number }>;
+  roleCounts: Record<ContactRole, number>;
   unlinkedEmails: string[];
   suppressionMarked: number;
   coverage: {
@@ -47,37 +55,37 @@ export interface ImportSummary {
   };
 }
 
-/** Mantle Associated Customer Label → canonical role. */
-export function mapMantleLabel(raw: string): { role: ContactRole; original: string } {
-  const original = raw.trim();
-  const key = original.toLowerCase();
-  if (key === 'primary') return { role: 'owner', original };
-  if (
-    key === 'secondary' ||
-    key === 'user' ||
-    key === 'technical' ||
-    key === 'customer' ||
-    key === 'staff'
-  ) {
-    return { role: 'staff', original };
+export function assertContactsCsvHeaders(headers: string[]): void {
+  const present = new Set(headers.map((header) => header.trim()));
+  const missing = CONTACTS_CSV_HEADERS.filter((header) => !present.has(header));
+  if (missing.length > 0) {
+    throw new Error(
+      `contacts:import CSV is missing required header(s): ${missing.join(', ')}. ` +
+        `Required headers (exact names): ${CONTACTS_CSV_HEADERS.join(', ')}`,
+    );
   }
-  if (key === 'collaborator') return { role: 'collaborator', original };
-  if (key === 'owner') return { role: 'owner', original };
-  // Unknown labels default to staff — same reach-preserving call as the old import.
-  return { role: 'staff', original: original || '(blank)' };
 }
 
-function readSuppressionEmails(filePath: string): string[] {
-  const text = fs.readFileSync(filePath, 'utf8');
-  const emails: string[] = [];
-  for (const line of text.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.toLowerCase() === 'email') continue;
-    // Allow a one-column CSV with a header, or bare emails.
-    const email = normalizeEmail(trimmed.split(',')[0] ?? '');
-    if (email.includes('@')) emails.push(email);
+export function parseRole(raw: string): ContactRole {
+  const value = raw.trim().toLowerCase();
+  if (value === 'owner' || value === 'staff' || value === 'collaborator') return value;
+  throw new Error(
+    `Invalid role "${raw.trim() || '(blank)'}". Use owner, staff, or collaborator.`,
+  );
+}
+
+/** true / 1 / yes → suppressed; false / 0 / no / blank → not suppressed. */
+export function parseSuppressed(raw: string): boolean {
+  const value = raw.trim().toLowerCase();
+  if (!value || value === '0' || value === 'false' || value === 'no' || value === 'n') {
+    return false;
   }
-  return [...new Set(emails)];
+  if (value === '1' || value === 'true' || value === 'yes' || value === 'y') {
+    return true;
+  }
+  throw new Error(
+    `Invalid suppressed value "${raw.trim()}". Use true/false (or 1/0, yes/no).`,
+  );
 }
 
 export function shopDomainCoverage(db: Db): { shopsTotal: number; shopsWithDomain: number } {
@@ -92,20 +100,14 @@ export function shopDomainCoverage(db: Db): { shopsTotal: number; shopsWithDomai
   return { shopsTotal: row.total, shopsWithDomain: row.with_domain ?? 0 };
 }
 
-export function importMantleContacts(options: ImportOptions): ImportSummary {
+export function importContacts(options: ImportOptions): ImportSummary {
   const db = options.db ?? getDb();
   const appId = options.appId.trim();
   assertAppInScope(appId, db);
 
-  if (options.commit && !options.suppressionPath) {
-    throw new Error(
-      'contacts:import --commit requires --suppression=<unsubscribed.csv>. ' +
-        'A missed opt-out is a CAN-SPAM problem.',
-    );
-  }
-
   const text = fs.readFileSync(options.csvPath, 'utf8');
-  const { rows } = parseCsv(text);
+  const { headers, rows } = parseCsv(text);
+  assertContactsCsvHeaders(headers);
 
   const matchCounts: Record<MatchMethod, number> = {
     auto: 0,
@@ -113,7 +115,11 @@ export function importMantleContacts(options: ImportOptions): ImportSummary {
     none: 0,
     manual: 0,
   };
-  const labelMapping = new Map<string, { role: ContactRole; count: number }>();
+  const roleCounts: Record<ContactRole, number> = {
+    owner: 0,
+    staff: 0,
+    collaborator: 0,
+  };
   const unlinkedEmails: string[] = [];
   const seenEmails = new Set<string>();
 
@@ -123,47 +129,33 @@ export function importMantleContacts(options: ImportOptions): ImportSummary {
     lastName: string;
     domain: string;
     role: ContactRole;
+    suppressed: boolean;
   };
   const pending: Pending[] = [];
 
   for (const row of rows) {
-    const email = normalizeEmail(
-      column(row, 'Email', 'Email Address', 'Contact Email', 'email'),
-    );
+    const email = normalizeEmail(row.email ?? '');
     if (!email.includes('@')) continue;
 
-    // Dedupe within the file — last row wins names/domain/role.
-    const firstName = column(row, 'First Name', 'First name', 'first_name');
-    const lastName = column(row, 'Last Name', 'Last name', 'last_name');
-    const domain = normalizeDomain(
-      column(
-        row,
-        'Associated Customer Shopify Domain',
-        'Shopify Domain',
-        'myshopify domain',
-        'Domain',
-      ),
-    );
-    const label = mapMantleLabel(
-      column(row, 'Associated Customer Label', 'Label', 'Customer Label'),
-    );
-
-    const mapKey = label.original.toLowerCase() || '(blank)';
-    const existingLabel = labelMapping.get(mapKey);
-    if (existingLabel) existingLabel.count += 1;
-    else labelMapping.set(mapKey, { role: label.role, count: 1 });
-
-    // Replace prior pending row for the same email.
-    const priorIdx = pending.findIndex((p) => p.email === email);
+    // Dedupe within the file — last row wins names/domain/role/suppression.
+    const role = parseRole(row.role ?? '');
     const next: Pending = {
       email,
-      firstName,
-      lastName,
-      domain,
-      role: label.role,
+      firstName: (row.first_name ?? '').trim(),
+      lastName: (row.last_name ?? '').trim(),
+      domain: normalizeDomain(row.myshopify_domain ?? ''),
+      role,
+      suppressed: parseSuppressed(row.suppressed ?? ''),
     };
-    if (priorIdx >= 0) pending[priorIdx] = next;
-    else pending.push(next);
+
+    const priorIdx = pending.findIndex((p) => p.email === email);
+    if (priorIdx >= 0) {
+      roleCounts[pending[priorIdx]!.role] -= 1;
+      pending[priorIdx] = next;
+    } else {
+      pending.push(next);
+    }
+    roleCounts[role] += 1;
     seenEmails.add(email);
   }
 
@@ -195,7 +187,7 @@ export function importMantleContacts(options: ImportOptions): ImportSummary {
           lastName: row.lastName || null,
           shop: { appId, myshopifyDomain: row.domain || null },
           role: row.role,
-          source: 'mantle_backfill',
+          source: 'csv_import',
           // Honest unknown — do not stamp import day as first_seen.
           seenAt: null,
         },
@@ -203,20 +195,18 @@ export function importMantleContacts(options: ImportOptions): ImportSummary {
       );
       matchCounts[result.matched] += 1;
       if (result.matched === 'none') unlinkedEmails.push(row.email);
+      if (row.suppressed) {
+        suppressContact(row.email, { source: 'csv_import', reason: 'unsubscribed' }, db);
+      }
     }
   };
 
   let contactsWritten = 0;
-  let suppressionMarked = 0;
+  const suppressionMarked = pending.filter((row) => row.suppressed).length;
 
   if (options.commit) {
     db.transaction(() => {
       runUpserts();
-      const emails = readSuppressionEmails(options.suppressionPath!);
-      for (const email of emails) {
-        suppressContact(email, { source: 'mantle', reason: 'unsubscribed' }, db);
-        suppressionMarked += 1;
-      }
     })();
     contactsWritten = pending.length;
   } else {
@@ -237,7 +227,7 @@ export function importMantleContacts(options: ImportOptions): ImportSummary {
     uniqueEmails: seenEmails.size,
     contactsWritten,
     matchCounts,
-    labelMapping: Object.fromEntries(labelMapping.entries()),
+    roleCounts,
     unlinkedEmails: [...new Set(unlinkedEmails)].sort(),
     suppressionMarked,
     coverage: {
@@ -258,15 +248,15 @@ export function formatImportSummary(summary: ImportSummary): string {
   lines.push(`Unique emails:    ${summary.uniqueEmails}`);
   if (summary.committed) {
     lines.push(`Contacts written: ${summary.contactsWritten}`);
-    lines.push(`Suppressions:     ${summary.suppressionMarked}`);
   }
+  lines.push(`Suppressions:     ${summary.suppressionMarked}`);
   lines.push('Match breakdown:');
   lines.push(`  auto       ${summary.matchCounts.auto}`);
   lines.push(`  ambiguous  ${summary.matchCounts.ambiguous}`);
   lines.push(`  none       ${summary.matchCounts.none}`);
-  lines.push('Label mapping (CSV → role):');
-  for (const [label, info] of Object.entries(summary.labelMapping).sort()) {
-    lines.push(`  ${label.padEnd(16)} → ${info.role} (${info.count})`);
+  lines.push('Role counts:');
+  for (const role of ['owner', 'staff', 'collaborator'] as const) {
+    lines.push(`  ${role.padEnd(14)} ${summary.roleCounts[role]}`);
   }
   lines.push('Shop domain coverage:');
   lines.push(

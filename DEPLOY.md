@@ -91,7 +91,7 @@ fly ssh console -C "node /app/dist/cli.js validate"
 ```
 
 ### Backups and Data Portability
-Since the SQLite database resides on a single physical disk, you should perform regular backups of the database file (`/data/partnerdex.db`). Most tables are disposable (rebuildable from the Partner API), but **Role-4 tables are not** — `app_reviews`, notification channels/deliveries, and especially **`contacts` / `contact_shops` / `contact_suppressions`**. Once the Mantle import lands, that SQLite file holds the only copy of the send list.
+Since the SQLite database resides on a single physical disk, you should perform regular backups of the database file (`/data/partnerdex.db`). Most tables are disposable (rebuildable from the Partner API), but **Role-4 tables are not** — `app_reviews`, notification channels/deliveries, and especially **`contacts` / `contact_shops` / `contact_suppressions`**. Once a contacts import lands, that SQLite file holds the only copy of the send list.
 
 #### 1. Fly volume snapshots (primary)
 Fly takes **daily snapshots automatically** and keeps them for **5 days** by default. That is enough for PartnerDex — confirm in the Fly dashboard under the volume (it will say something like “snapshots are taken daily and kept for 5 days”), or:
@@ -130,20 +130,30 @@ fly ssh sftp get /data/contacts-dump.json ./contacts-dump.json
 partnerdex contacts:restore --from=./contacts-dump.json
 ```
 
-`contacts:restore` **replaces** the three tables wholesale — it is a round-trip restore, not a merge. Archive the raw Mantle Contacts CSV and `unsubscribed.csv` permanently (object storage) as the origin record, independent of PartnerDex.
+`contacts:restore` **replaces** the three tables wholesale — it is a round-trip restore, not a merge. Archive your source contacts CSV permanently (object storage) as the origin record, independent of PartnerDex.
 
-#### 4. Mantle contacts import (one-time)
-After deploy, and once a volume snapshot exists:
+#### 4. Contacts CSV import (one-time)
+After deploy, and once a volume snapshot exists. The CSV must use these **exact** headers (extra columns are ignored):
+
+```csv
+email,first_name,last_name,myshopify_domain,role,suppressed
+ada@example.com,Ada,Lovelace,acme.myshopify.com,owner,false
+bob@example.com,Bob,Builder,solo.myshopify.com,staff,true
+```
+
+- `role` must be `owner`, `staff`, or `collaborator`
+- `suppressed` is `true` / `false` (also accepts `1`/`0`, `yes`/`no`; blank = false)
+- Rows without a valid email are skipped; blank `myshopify_domain` keeps the contact unlinked
 
 ```bash
 # Read-only: is shops.myshopify_domain populated?
 fly ssh console -C "node /app/dist/cli.js contacts:coverage"
 
 # Preview (default — writes nothing)
-fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/mantle-contacts.csv --app-id=<your-app-id>"
+fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/contacts.csv --app-id=<your-app-id>"
 
-# Commit — requires a validated unsubscribe list
-fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/mantle-contacts.csv --app-id=<your-app-id> --suppression=/data/unsubscribed.csv --commit"
+# Commit
+fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/contacts.csv --app-id=<your-app-id> --commit"
 ```
 
 Set `CONTACTS_INGEST_TOKEN` (Fly secret) before any app producer starts calling `POST /api/contacts/ingest`.

@@ -4,14 +4,14 @@ import { getDb } from '../db/index.js';
 import { resolveScopedAppIds } from '../sync/index.js';
 
 /**
- * Shared write path for live ingest and the Mantle CSV import.
+ * Shared write path for live ingest and the contacts CSV import.
  *
  * Email is the natural key. Normalization, shop matching, and the rule that a
  * human `manual` link is never overwritten all live here so the two callers
  * cannot drift apart.
  */
 
-export type ContactSource = 'mantle_backfill' | 'app_capture';
+export type ContactSource = 'mantle_backfill' | 'app_capture' | 'csv_import';
 export type ContactRole = 'owner' | 'staff' | 'collaborator';
 export type MatchMethod = 'auto' | 'manual' | 'ambiguous' | 'none';
 
@@ -148,8 +148,11 @@ export function upsertContact(
   assertAppInScope(appId, db);
 
   const source = input.source;
-  if (source !== 'mantle_backfill' && source !== 'app_capture') {
-    throw new ContactsError(`source must be mantle_backfill or app_capture, got "${source}".`, 422);
+  if (source !== 'mantle_backfill' && source !== 'app_capture' && source !== 'csv_import') {
+    throw new ContactsError(
+      `source must be mantle_backfill, app_capture, or csv_import, got "${source}".`,
+      422,
+    );
   }
 
   const role: ContactRole = input.role ?? 'staff';
@@ -246,7 +249,11 @@ export function upsertContact(
 /** Email-global suppression — every contact row sharing the email is flipped. */
 export function suppressContact(
   email: string,
-  options: { source: 'mantle' | 'resend_webhook' | 'manual'; reason?: string | null; at?: string },
+  options: {
+    source: 'mantle' | 'resend_webhook' | 'manual' | 'csv_import';
+    reason?: string | null;
+    at?: string;
+  },
   db: Db = getDb(),
 ): void {
   const normalized = normalizeEmail(email);

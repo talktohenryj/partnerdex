@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import { closeDb, getDb } from '../src/db/index.js';
-import { importMantleContacts } from '../src/contacts/import.js';
+import { importContacts } from '../src/contacts/import.js';
 import { upsertContact } from '../src/contacts/upsert.js';
 import { createApp } from '../src/server/index.js';
 import { APP_ID, resetEnvironment } from './helpers.js';
@@ -197,7 +197,7 @@ describe('POST /api/contacts/ingest', () => {
   });
 });
 
-describe('contacts:import Mantle CSV', () => {
+describe('contacts:import CSV', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -218,16 +218,16 @@ describe('contacts:import Mantle CSV', () => {
     return filePath;
   }
 
-  const csv = `Email,First Name,Last Name,Associated Customer Shopify Domain,Associated Customer Label
-ada@example.com,Ada,Lovelace,acme.myshopify.com,primary
-ada@example.com,Ada,Lovelace,acme.myshopify.com,primary
-bob@example.com,Bob,Builder,solo.myshopify.com,Secondary
-ghost@example.com,Ghost,User,missing.myshopify.com,user
+  const csv = `email,first_name,last_name,myshopify_domain,role,suppressed
+ada@example.com,Ada,Lovelace,acme.myshopify.com,owner,false
+ada@example.com,Ada,Lovelace,acme.myshopify.com,owner,false
+bob@example.com,Bob,Builder,solo.myshopify.com,staff,true
+ghost@example.com,Ghost,User,missing.myshopify.com,staff,false
 `;
 
   it('preview prints match counts and writes nothing', () => {
     const csvPath = writeCsv('contacts.csv', csv);
-    const summary = importMantleContacts({
+    const summary = importContacts({
       csvPath,
       appId: APP_ID,
       commit: false,
@@ -238,22 +238,21 @@ ghost@example.com,Ghost,User,missing.myshopify.com,user
     assert.equal(summary.matchCounts.auto, 2);
     assert.equal(summary.matchCounts.none, 1);
     assert.equal(summary.contactsWritten, 0);
+    assert.equal(summary.suppressionMarked, 1);
     assert.equal(
       (getDb().prepare(`SELECT COUNT(*) AS n FROM contacts`).get() as { n: number }).n,
       0,
     );
-    assert.ok(summary.labelMapping.primary);
-    assert.equal(summary.labelMapping.primary!.role, 'owner');
+    assert.equal(summary.roleCounts.owner, 1);
+    assert.equal(summary.roleCounts.staff, 2);
   });
 
   it('commit writes contacts + suppressions and is idempotent', () => {
     const csvPath = writeCsv('contacts.csv', csv);
-    const suppressionPath = writeCsv('unsubscribed.csv', 'bob@example.com\n');
 
-    const first = importMantleContacts({
+    const first = importContacts({
       csvPath,
       appId: APP_ID,
-      suppressionPath,
       commit: true,
     });
     assert.equal(first.committed, true);
@@ -278,12 +277,11 @@ ghost@example.com,Ghost,User,missing.myshopify.com,user
     };
     assert.equal(ada.first_seen_at, null);
     assert.equal(ada.last_seen_at, null);
-    assert.equal(ada.source, 'mantle_backfill');
+    assert.equal(ada.source, 'csv_import');
 
-    const second = importMantleContacts({
+    const second = importContacts({
       csvPath,
       appId: APP_ID,
-      suppressionPath,
       commit: true,
     });
     assert.equal(
@@ -294,11 +292,23 @@ ghost@example.com,Ghost,User,missing.myshopify.com,user
     assert.equal(second.matchCounts.auto, 2);
   });
 
-  it('refuses --commit without a suppression file', () => {
-    const csvPath = writeCsv('contacts.csv', csv);
-    assert.throws(
-      () => importMantleContacts({ csvPath, appId: APP_ID, commit: true }),
-      /suppression/,
+  it('rejects CSVs that omit a required header', () => {
+    const csvPath = writeCsv(
+      'bad.csv',
+      `email,first_name,last_name,myshopify_domain,role
+ada@example.com,Ada,Lovelace,acme.myshopify.com,owner
+`,
     );
+    assert.throws(() => importContacts({ csvPath, appId: APP_ID }), /suppressed/);
+  });
+
+  it('rejects invalid role values', () => {
+    const csvPath = writeCsv(
+      'bad-role.csv',
+      `email,first_name,last_name,myshopify_domain,role,suppressed
+ada@example.com,Ada,Lovelace,acme.myshopify.com,primary,false
+`,
+    );
+    assert.throws(() => importContacts({ csvPath, appId: APP_ID }), /Invalid role/);
   });
 });

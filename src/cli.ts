@@ -2,7 +2,7 @@
 import { ConfigError, getConfig } from './config.js';
 import { formatDomainCoverage, reportDomainCoverage } from './contacts/coverage.js';
 import { dumpContactsToFile, restoreContactsFromFile } from './contacts/dump.js';
-import { formatImportSummary, importMantleContacts } from './contacts/import.js';
+import { formatImportSummary, importContacts } from './contacts/import.js';
 import { getDb } from './db/index.js';
 import { partnerQuery, PartnerApiError } from './partner/client.js';
 import { HEALTHCHECK_QUERY } from './partner/queries.js';
@@ -27,8 +27,8 @@ Usage:
   partnerdex contacts:restore --from=<dump.json>
                                  Replace contacts tables from a dump (destructive)
   partnerdex contacts:coverage   Check shops.myshopify_domain population (pre-import)
-  partnerdex contacts:import --from=<contacts.csv> --app-id=<id> [--suppression=<unsubscribed.csv>] [--commit]
-                                 Preview (default) or commit a Mantle contacts CSV
+  partnerdex contacts:import --from=<contacts.csv> --app-id=<id> [--commit]
+                                 Preview (default) or commit a contacts CSV
 
 Metrics:
 ${listMetrics()
@@ -242,23 +242,21 @@ async function main(): Promise<void> {
       const appId = flags['app-id'] ?? flags.appId;
       if (!from || !appId) {
         console.error(
-          'Usage: partnerdex contacts:import --from=<contacts.csv> --app-id=<id> ' +
-            '[--suppression=<unsubscribed.csv>] [--commit]',
+          'Usage: partnerdex contacts:import --from=<contacts.csv> --app-id=<id> [--commit]',
         );
         process.exitCode = 1;
         break;
       }
       getDb();
-      const summary = importMantleContacts({
+      const summary = importContacts({
         csvPath: from,
         appId,
-        suppressionPath: flags.suppression,
         commit: flags.commit === 'true',
       });
       console.log(formatImportSummary(summary));
       if (!summary.committed) {
         console.log(
-          '\nRe-run with --commit --suppression=<unsubscribed.csv> to write. ' +
+          '\nRe-run with --commit to write. ' +
             'Take a volume snapshot first: fly volumes snapshots create <volume-id>',
         );
       }
