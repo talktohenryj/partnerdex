@@ -4,7 +4,7 @@ import { shopDomainCoverage } from './import.js';
 
 /**
  * Read-only check: is shops.myshopify_domain populated enough to trust the
- * Mantle import's domain match? Thin coverage is a sync gap to fix, not a
+ * contacts import's domain match? Thin coverage is a sync gap to fix, not a
  * reason to fall back to fuzzy name matching.
  */
 export function reportDomainCoverage(db: Db = getDb()): {

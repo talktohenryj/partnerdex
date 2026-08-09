@@ -11,7 +11,7 @@ import { resolveScopedAppIds } from '../sync/index.js';
  * cannot drift apart.
  */
 
-export type ContactSource = 'mantle_backfill' | 'app_capture' | 'csv_import';
+export type ContactSource = 'app_capture' | 'csv_import';
 export type ContactRole = 'owner' | 'staff' | 'collaborator';
 export type MatchMethod = 'auto' | 'manual' | 'ambiguous' | 'none';
 
@@ -148,11 +148,8 @@ export function upsertContact(
   assertAppInScope(appId, db);
 
   const source = input.source;
-  if (source !== 'mantle_backfill' && source !== 'app_capture' && source !== 'csv_import') {
-    throw new ContactsError(
-      `source must be mantle_backfill, app_capture, or csv_import, got "${source}".`,
-      422,
-    );
+  if (source !== 'app_capture' && source !== 'csv_import') {
+    throw new ContactsError(`source must be app_capture or csv_import, got "${source}".`, 422);
   }
 
   const role: ContactRole = input.role ?? 'staff';
@@ -250,7 +247,7 @@ export function upsertContact(
 export function suppressContact(
   email: string,
   options: {
-    source: 'mantle' | 'resend_webhook' | 'manual' | 'csv_import';
+    source: 'resend_webhook' | 'manual' | 'csv_import';
     reason?: string | null;
     at?: string;
   },
@@ -259,6 +256,8 @@ export function suppressContact(
   const normalized = normalizeEmail(email);
   if (!normalized) return;
   const at = options.at ?? new Date().toISOString();
+  const stubSource: ContactSource =
+    options.source === 'csv_import' ? 'csv_import' : 'app_capture';
 
   db.transaction(() => {
     db.prepare(
@@ -292,8 +291,8 @@ export function suppressContact(
         `INSERT INTO contacts (
            email, first_name, last_name, is_suppressed, source,
            first_seen_at, last_seen_at, created_at, updated_at
-         ) VALUES (?, NULL, NULL, 1, 'mantle_backfill', NULL, NULL, ?, ?)`,
-      ).run(normalized, at, at);
+         ) VALUES (?, NULL, NULL, 1, ?, NULL, NULL, ?, ?)`,
+      ).run(normalized, stubSource, at, at);
     }
   })();
 }

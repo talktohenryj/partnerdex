@@ -1,6 +1,6 @@
 /**
  * Minimal RFC4180-ish CSV reader — quoted fields, escaped quotes, CRLF/LF.
- * No dependency; Mantle's contacts export is a flat table of strings.
+ * No dependency; contacts import is a flat table of strings.
  */
 
 export function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
@@ -81,21 +81,4 @@ function parseRecords(text: string): string[][] {
   }
 
   return records;
-}
-
-/** Case-insensitive header lookup for Mantle's slightly inconsistent labels. */
-export function column(row: Record<string, string>, ...candidates: string[]): string {
-  const keys = Object.keys(row);
-  for (const candidate of candidates) {
-    const want = candidate.toLowerCase();
-    const hit = keys.find((key) => key.toLowerCase() === want);
-    if (hit && row[hit]) return row[hit]!;
-  }
-  // Partial contains match as a last resort (e.g. "Email Address" vs "Email").
-  for (const candidate of candidates) {
-    const want = candidate.toLowerCase();
-    const hit = keys.find((key) => key.toLowerCase().includes(want));
-    if (hit && row[hit]) return row[hit]!;
-  }
-  return '';
 }

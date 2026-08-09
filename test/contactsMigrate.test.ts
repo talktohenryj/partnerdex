@@ -36,7 +36,7 @@ function seedContact(db: Db): void {
     `INSERT INTO contacts (
        email, first_name, last_name, is_suppressed, source,
        first_seen_at, last_seen_at, created_at, updated_at
-     ) VALUES (?, ?, ?, 0, 'mantle_backfill', NULL, NULL, ?, ?)`,
+     ) VALUES (?, ?, ?, 0, 'csv_import', NULL, NULL, ?, ?)`,
   ).run('ada@example.com', 'Ada', 'Lovelace', now, now);
 
   db.prepare(
@@ -47,14 +47,14 @@ function seedContact(db: Db): void {
 
   db.prepare(
     `INSERT INTO contact_suppressions (email, suppressed_at, source, reason)
-     VALUES (?, ?, 'mantle', 'unsubscribed')`,
+     VALUES (?, ?, 'csv_import', 'unsubscribed')`,
   ).run('opted-out@example.com', now);
 
   db.prepare(
     `INSERT INTO contacts (
        email, first_name, last_name, is_suppressed, source,
        first_seen_at, last_seen_at, created_at, updated_at
-     ) VALUES (?, NULL, NULL, 1, 'mantle_backfill', NULL, NULL, ?, ?)`,
+     ) VALUES (?, NULL, NULL, 1, 'csv_import', NULL, NULL, ?, ?)`,
   ).run('opted-out@example.com', now, now);
 }
 
@@ -212,7 +212,7 @@ describe('contacts:dump round-trip', () => {
     assert.deepEqual(ada, {
       first_name: 'Ada',
       last_name: 'Lovelace',
-      source: 'mantle_backfill',
+      source: 'csv_import',
     });
 
     const link = db
@@ -223,6 +223,6 @@ describe('contacts:dump round-trip', () => {
     const suppression = db
       .prepare(`SELECT source, reason FROM contact_suppressions WHERE email = ?`)
       .get('opted-out@example.com') as { source: string; reason: string };
-    assert.deepEqual(suppression, { source: 'mantle', reason: 'unsubscribed' });
+    assert.deepEqual(suppression, { source: 'csv_import', reason: 'unsubscribed' });
   });
 });
