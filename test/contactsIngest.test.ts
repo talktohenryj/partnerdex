@@ -115,6 +115,55 @@ describe('POST /api/contacts/ingest', () => {
     });
   });
 
+  it('stamps created_at on first ingest from seenAt and never overwrites it', async () => {
+    const firstSeen = '2026-08-06T12:00:00.000Z';
+    const laterSeen = '2026-08-13T18:00:00.000Z';
+    const body = {
+      email: 'new@example.com',
+      firstName: 'New',
+      lastName: 'Person',
+      appId: APP_ID,
+      shopId: '10',
+      source: 'app_capture',
+      seenAt: firstSeen,
+    };
+
+    const first = await ingest(body);
+    assert.equal(first.status, 200);
+    assert.equal((await first.json() as { created: boolean }).created, true);
+
+    const db = getDb();
+    const afterCreate = db
+      .prepare(
+        `SELECT created_at, first_seen_at, last_seen_at FROM contacts WHERE email = ?`,
+      )
+      .get('new@example.com') as {
+      created_at: string;
+      first_seen_at: string | null;
+      last_seen_at: string | null;
+    };
+    assert.equal(afterCreate.created_at, firstSeen);
+    assert.equal(afterCreate.first_seen_at, firstSeen);
+    assert.equal(afterCreate.last_seen_at, firstSeen);
+
+    const second = await ingest({ ...body, seenAt: laterSeen });
+    assert.equal(second.status, 200);
+    assert.equal((await second.json() as { created: boolean }).created, false);
+
+    const afterUpdate = db
+      .prepare(
+        `SELECT created_at, first_seen_at, last_seen_at FROM contacts WHERE email = ?`,
+      )
+      .get('new@example.com') as {
+      created_at: string;
+      first_seen_at: string | null;
+      last_seen_at: string | null;
+    };
+    assert.equal(afterUpdate.created_at, firstSeen);
+    assert.equal(afterUpdate.first_seen_at, firstSeen);
+    assert.equal(afterUpdate.last_seen_at, laterSeen);
+  });
+
   it('rejects an out-of-scope app_id with 403', async () => {
     const response = await ingest({
       email: 'x@example.com',
@@ -269,14 +318,18 @@ ghost@example.com,Ghost,User,missing.myshopify.com,staff,false
     );
 
     const ada = db
-      .prepare(`SELECT first_seen_at, last_seen_at, source FROM contacts WHERE email = ?`)
+      .prepare(
+        `SELECT first_seen_at, last_seen_at, created_at, source FROM contacts WHERE email = ?`,
+      )
       .get('ada@example.com') as {
       first_seen_at: string | null;
       last_seen_at: string | null;
+      created_at: string;
       source: string;
     };
     assert.equal(ada.first_seen_at, null);
     assert.equal(ada.last_seen_at, null);
+    assert.ok(ada.created_at, 'CSV import stamps created_at as row-insert time');
     assert.equal(ada.source, 'csv_import');
 
     const second = importContacts({

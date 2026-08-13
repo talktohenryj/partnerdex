@@ -161,6 +161,11 @@ export function upsertContact(
   const lastName = nonEmpty(input.lastName);
   const seenAt = nonEmpty(input.seenAt);
   const now = new Date().toISOString();
+  // PartnerDex owns created_at: stamp it once on insert. iziGift cannot know
+  // whether the row exists, so it sends seenAt (identification time) and we
+  // use that on first insert. CSV import sends no seenAt — stamp import time.
+  // Later upserts never overwrite created_at.
+  const createdAt = seenAt ?? now;
 
   const existing = db
     .prepare('SELECT email FROM contacts WHERE email = ?')
@@ -173,7 +178,7 @@ export function upsertContact(
        first_seen_at, last_seen_at, created_at, updated_at
      ) VALUES (
        @email, @firstName, @lastName, 0, @source,
-       @firstSeen, @lastSeen, @now, @now
+       @firstSeen, @lastSeen, @createdAt, @now
      )
      ON CONFLICT(email) DO UPDATE SET
        first_name = CASE
@@ -196,6 +201,7 @@ export function upsertContact(
     source,
     firstSeen: seenAt,
     lastSeen: seenAt,
+    createdAt,
     now,
   });
 
