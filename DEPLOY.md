@@ -91,29 +91,26 @@ fly ssh console -C "node /app/dist/cli.js validate"
 ```
 
 ### Backups and Data Portability
-Since the SQLite database resides on a single physical disk, you should perform regular backups of the database file (`/data/partnerdex.db`). Most tables are disposable (rebuildable from the Partner API), but **Role-4 tables are not** — `app_reviews`, notification channels/deliveries, and especially **`contacts` / `contact_shops` / `contact_suppressions`**. Once the Mantle import lands, that SQLite file holds the only copy of the send list.
+Since the SQLite database resides on a single physical disk, you should perform regular backups of the database file (`/data/partnerdex.db`). Most tables are disposable (rebuildable from the Partner API), but **Role-4 tables are not** — `app_reviews`, notification channels/deliveries, and especially **`contacts` / `contact_shops` / `contact_suppressions`**. Once a contacts import lands, that SQLite file holds the only copy of the send list.
 
 #### 1. Fly volume snapshots (primary)
-Scheduled snapshots of the `partnerdex_data` volume. Cadence and retention:
-
-| Setting | Recommendation |
-|---------|----------------|
-| Cadence | Daily (minimum); take an extra manual snapshot **immediately before** any contacts import or schema maintenance |
-| Retention | Keep at least 7 daily snapshots |
+Fly takes **daily snapshots automatically** and keeps them for **5 days** by default. That is enough for PartnerDex — confirm in the Fly dashboard under the volume (it will say something like “snapshots are taken daily and kept for 5 days”), or:
 
 ```bash
-# Find the volume id
+# Find the volume id (NAME should be partnerdex_data)
 fly volumes list
 
-# Manual snapshot (do this before contacts:import --commit)
-fly volumes snapshots create <volume-id>
-
-# List / restore
+# List snapshots — requires the volume id
 fly volumes snapshots list <volume-id>
-# Restore = create a new volume from a snapshot, then attach it (see Fly docs)
 ```
 
-Confirm scheduled snapshot settings for the volume in the Fly dashboard (or `fly volumes update`) so daily snapshots keep running without a manual step.
+Before any contacts import (`contacts:import --commit`) or destructive maintenance, take an extra manual snapshot:
+
+```bash
+fly volumes snapshots create <volume-id>
+```
+
+Restore = create a new volume from a snapshot, then attach it (see [Fly volume snapshots](https://fly.io/docs/volumes/snapshots/)).
 
 #### 2. Full DB copy (off-box)
 To download a local copy of your production database:
@@ -122,7 +119,7 @@ fly ssh sftp get /data/partnerdex.db ./partnerdex-backup.db
 ```
 
 #### 3. Contacts-only dump (portable Role-4 backup)
-Belt to the snapshot's braces — a JSON export of just the three contacts tables, safe to pull off the machine before destructive work and restore into an empty DB if the volume is lost:
+Belt-and-braces alongside volume snapshots — a JSON export of just the three contacts tables, safe to pull off the machine before destructive work and restore into an empty DB if the volume is lost:
 
 ```bash
 # On the machine / via ssh
@@ -133,7 +130,33 @@ fly ssh sftp get /data/contacts-dump.json ./contacts-dump.json
 partnerdex contacts:restore --from=./contacts-dump.json
 ```
 
-`contacts:restore` **replaces** the three tables wholesale — it is a round-trip restore, not a merge. Archive the raw Mantle Contacts CSV and `unsubscribed.csv` permanently (object storage) as the origin record, independent of PartnerDex.
+`contacts:restore` **replaces** the three tables wholesale — it is a round-trip restore, not a merge. Archive your source contacts CSV permanently (object storage) as the origin record, independent of PartnerDex.
+
+#### 4. Contacts CSV import (one-time)
+After deploy, and once a volume snapshot exists. The CSV must use these **exact** headers (extra columns are ignored):
+
+```csv
+email,first_name,last_name,myshopify_domain,role,suppressed
+ada@example.com,Ada,Lovelace,acme.myshopify.com,owner,false
+bob@example.com,Bob,Builder,solo.myshopify.com,staff,true
+```
+
+- `role` must be `owner`, `staff`, or `collaborator`
+- `suppressed` is `true` / `false` (also accepts `1`/`0`, `yes`/`no`; blank = false)
+- Rows without a valid email are skipped; blank `myshopify_domain` keeps the contact unlinked
+
+```bash
+# Read-only: is shops.myshopify_domain populated?
+fly ssh console -C "node /app/dist/cli.js contacts:coverage"
+
+# Preview (default — writes nothing)
+fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/contacts.csv --app-id=<your-app-id>"
+
+# Commit
+fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/contacts.csv --app-id=<your-app-id> --commit"
+```
+
+Set `CONTACTS_INGEST_TOKEN` (Fly secret) before any app producer starts calling `POST /api/contacts/ingest`.
 
 ### Resilient Redeploys
 During deployments, the running container stops and restarts, which may interrupt an active sync loop. This is completely safe; PartnerDex's synchronization logic is fully incremental, re-reading records from a 3-day overlap window prior to the last known watermark to catch late-arriving events.

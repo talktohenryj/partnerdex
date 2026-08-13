@@ -38,11 +38,12 @@ function columns(db: Db, table: string): Set<string> {
 
 /**
  * Contacts store — Role 4. The Partner API never had this data, so nothing here
- * can be recovered by re-syncing. Email is the natural key (Mantle keyed on it;
- * email-global suppression assumes it). contact_shops is a separate table
- * because one person can manage many stores and the same person can appear
- * across apps; contact_suppressions is separate so an opt-out survives every
- * rewrite of the rows around it.
+ * can be recovered by re-syncing. Email is the natural key (email-global
+ * suppression assumes it). contact_shops is a separate table because one person
+ * can manage many stores and the same person can appear across apps;
+ * contact_suppressions is separate so an opt-out survives every rewrite of the
+ * rows around it. A contact_suppressions row is do-not-contact / opt-out, not
+ * erasure (erasure would delete the person).
  */
 export const CONTACTS_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS contacts (
