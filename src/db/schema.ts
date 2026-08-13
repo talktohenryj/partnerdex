@@ -8,11 +8,11 @@
  *                         write time so read-time math is sums + date compares
  *   3. operational      — `sync_state`, `metric_cache`, `drift_snapshots`
  *   4. durable          — `notification_channels` and the two tables that decide
- *                         what has already been said and to whom; `app_reviews`,
- *                         which holds the only surviving copy of a review once
- *                         the App Store stops serving it; the BigQuery
- *                         connection, whose credential nothing else can supply;
- *                         and (via the migration runner in migrate.ts)
+ *                         what has already been said and to whom; `app_listings`;
+ *                         `app_reviews`, which holds the only surviving copy of a
+ *                         review once the App Store stops serving it; the
+ *                         BigQuery connection, whose credential nothing else can
+ *                         supply; and (via the migration runner in migrate.ts)
  *                         `contacts`, `contact_shops`, `contact_suppressions`
  *
  * Roles 1 and 2 are disposable: both are rebuilt from the API on demand. Role 4
