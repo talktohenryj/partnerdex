@@ -19,9 +19,8 @@ export function getDb(): Db {
 
   const db = new Database(runtime.databasePath);
   db.pragma('busy_timeout = 5000');
-  // Disposable tables first (idempotent CREATE IF NOT EXISTS), then durable
-  // Role-4 tables through the migration runner — contacts cannot be rebuilt
-  // from the Partner API, so schema changes for them need a real version path.
+  // Schema first, then the changes it cannot express. A migration may reference
+  // a table SCHEMA_SQL creates, so the order is load-bearing.
   db.exec(SCHEMA_SQL);
   migrate(db);
 
