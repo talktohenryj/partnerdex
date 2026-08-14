@@ -2717,3 +2717,51 @@ button.primary:disabled,
 .funnel-settings-title.spaced {
   margin-top: 14px;
 }
+
+/* -------------------------------------------------------------- contacts */
+
+.contact-extra {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.contact-row-suppressed .customer-name,
+.contact-row-suppressed .customer-domain {
+  color: var(--muted);
+}
+
+.pill-role-owner {
+  color: var(--brand-accent);
+  border-color: color-mix(in srgb, var(--brand-accent) 40%, transparent);
+}
+
+.pill-ambiguous {
+  margin-left: 6px;
+  color: var(--warning, #8a6116);
+  border-color: color-mix(in srgb, var(--warning, #c9a227) 40%, transparent);
+}
+
+.pill-suppressed {
+  color: var(--delta-down);
+  border-color: color-mix(in srgb, var(--delta-down) 40%, transparent);
+}
+
+.customer-table td .link-button {
+  display: inline-block;
+  margin-left: 8px;
+}
+
+.customer-table td .review-picker {
+  margin-top: 10px;
+}
+
+.contact-footnote {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

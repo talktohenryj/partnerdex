@@ -18,6 +18,7 @@ import {
 import { formatDateTime } from './format';
 import { CustomerDetail } from './components/CustomerDetail';
 import { Customers } from './components/Customers';
+import { Contacts } from './components/Contacts';
 import { Login } from './components/Login';
 import { MetricCard } from './components/MetricCard';
 import { Nav } from './components/Nav';
@@ -259,6 +260,7 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
   }
 
   const isCustomers = page.kind === 'customers';
+  const isContacts = page.kind === 'contacts';
   const isNotifications = page.kind === 'notifications';
   const isReviews = page.kind === 'reviews';
   const isListings = page.kind === 'listings';
@@ -270,7 +272,7 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
   //
   // The funnel is the odd one: it takes the same filters but fetches its own
   // shape, so it shows the controls without joining the overview request.
-  const isMetrics = !isCustomers && !isNotifications && !isListings && !isBigQuery;
+  const isMetrics = !isCustomers && !isContacts && !isNotifications && !isListings && !isBigQuery;
   const filters = page.filters ?? DEFAULT_FILTERS;
 
   const [collapsed, setCollapsed] = useState(
@@ -582,6 +584,7 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
         !isReviews &&
         !isBigQuery &&
         !isFunnel &&
+        !isContacts &&
         status &&
         !hasData ? (
           <div className="notice">
@@ -611,6 +614,8 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
             <Customers appId={query.appId} />
           )
         ) : null}
+
+        {isContacts ? <Contacts appId={query.appId} /> : null}
 
         {isNotifications ? <Notifications /> : null}
 
