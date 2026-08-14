@@ -323,6 +323,40 @@ h3,
   padding: 8px 0;
 }
 
+/*
+ * A parent with children (Customers → Contacts) opens its submenu only when
+ * that section is the current page. The child has no icon; the indent lines
+ * it up with the parent's label.
+ */
+.nav-link-section {
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
+  color: var(--brand-accent);
+}
+
+.nav-chevron {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+}
+
+.nav.collapsed .nav-chevron {
+  display: none;
+}
+
+.nav-children {
+  margin: 2px 0 4px;
+}
+
+.nav-link.nav-child {
+  padding-left: 36px;
+  gap: 0;
+}
+
 /* `margin-top: auto` takes the slack in the column, so the rule sits directly
    above sign-out on a short rail and at the foot of the viewport on a tall one. */
 .nav-foot {
@@ -2720,26 +2754,54 @@ button.primary:disabled,
 
 /* -------------------------------------------------------------- contacts */
 
-.contact-extra {
-  margin-left: 6px;
+.contact-customer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.contact-customer-link .customer-name {
+  color: var(--brand-accent);
+  font-weight: 500;
+}
+
+.contact-role {
   color: var(--muted);
   font-size: 11px;
 }
 
 .contact-row-suppressed .customer-name,
-.contact-row-suppressed .customer-domain {
+.contact-row-suppressed .customer-domain,
+.contact-row-suppressed .contact-role {
   color: var(--muted);
 }
 
-.pill-role-owner {
+.customer-table td .customer-name + .pill {
+  margin-left: 8px;
+}
+
+.pill-source-app_capture {
   color: var(--brand-accent);
-  border-color: color-mix(in srgb, var(--brand-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--brand-accent) 12%, transparent);
+  border-color: transparent;
+}
+
+.pill-source-csv_import {
+  color: var(--delta-up);
+  background: color-mix(in srgb, var(--delta-up) 12%, transparent);
+  border-color: transparent;
 }
 
 .pill-ambiguous {
   margin-left: 6px;
   color: var(--warning, #8a6116);
   border-color: color-mix(in srgb, var(--warning, #c9a227) 40%, transparent);
+}
+
+.contact-customer .pill-ambiguous {
+  margin-left: 0;
+  margin-top: 4px;
 }
 
 .pill-suppressed {

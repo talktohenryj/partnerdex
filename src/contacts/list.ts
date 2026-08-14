@@ -20,7 +20,7 @@ import type { ContactRole, MatchMethod } from './upsert.js';
  */
 
 export type ContactLinkedFilter = 'all' | 'unlinked' | 'ambiguous' | 'suppressed';
-export type ContactSort = 'name' | 'email' | 'mrr' | 'recent';
+export type ContactSort = 'name' | 'email' | 'mrr' | 'recent' | 'created';
 
 export interface ContactShop {
   shopId: string;
@@ -42,9 +42,10 @@ export interface ContactSummary {
   role: ContactRole | null;
   matchMethod: MatchMethod | null;
   shops: ContactShop[];
-  /** The shop shown in the Store column: owner first, then highest MRR. */
+  /** The shop shown in the Customers column: owner first, then highest MRR. */
   primaryShop: ContactShop | null;
   lastSeenAt: string | null;
+  createdAt: string | null;
 }
 
 export interface ContactListResult {
@@ -187,6 +188,7 @@ const ORDER_BY: Record<ContactSort, string> = {
   email: 'c.email ASC',
   mrr: 'primaryMrr DESC, c.email ASC',
   recent: 'c.last_seen_at DESC, c.email ASC',
+  created: 'c.created_at DESC, c.email ASC',
 };
 
 interface ContactRow {
@@ -196,6 +198,7 @@ interface ContactRow {
   isSuppressed: number;
   source: string;
   lastSeenAt: string | null;
+  createdAt: string | null;
   primaryMrr: number;
 }
 
@@ -287,6 +290,7 @@ export function listContacts(
            c.is_suppressed AS isSuppressed,
            c.source AS source,
            c.last_seen_at AS lastSeenAt,
+           c.created_at AS createdAt,
            ${primaryMrrSql} AS primaryMrr
       FROM contacts c
       ${where.sql}
@@ -387,6 +391,7 @@ export function listContacts(
         shops,
         primaryShop,
         lastSeenAt: row.lastSeenAt,
+        createdAt: row.createdAt,
       };
     }),
     total,
