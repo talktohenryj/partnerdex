@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   fetchContactCandidates,
   fetchContacts,
@@ -9,7 +9,7 @@ import {
   type ContactShopCandidate,
   type ContactSummary,
 } from '../api';
-import { formatValue } from '../format';
+import { formatFullDate } from '../format';
 
 /**
  * The people behind the stores.
@@ -27,6 +27,11 @@ const ROLE_LABEL: Record<string, string> = {
   collaborator: 'Collaborator',
 };
 
+const SOURCE_LABEL: Record<string, string> = {
+  app_capture: 'App login',
+  csv_import: 'CSV import',
+};
+
 const LINKED_FILTERS: Array<{ value: ContactLinkedFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'unlinked', label: 'Unlinked' },
@@ -36,9 +41,8 @@ const LINKED_FILTERS: Array<{ value: ContactLinkedFilter; label: string }> = [
 
 const SORTS = [
   { value: 'name', label: 'Name' },
-  { value: 'email', label: 'Email' },
-  { value: 'mrr', label: 'Highest store MRR' },
-  { value: 'recent', label: 'Most recently seen' },
+  { value: 'created', label: 'Newest created' },
+  { value: 'recent', label: 'Last seen' },
 ];
 
 function displayName(row: ContactSummary): string {
@@ -50,6 +54,10 @@ function shopLabel(shop: ContactShop): string {
   return shop.name || shop.domain || shop.shopId;
 }
 
+function sourceLabel(source: string): string {
+  return SOURCE_LABEL[source] ?? source.replace(/_/g, ' ');
+}
+
 /** Waits for the typing to stop before asking the server. */
 function useDebounced<T>(value: T, delay: number): T {
   const [settled, setSettled] = useState(value);
@@ -58,14 +66,6 @@ function useDebounced<T>(value: T, delay: number): T {
     return () => window.clearTimeout(timer);
   }, [value, delay]);
   return settled;
-}
-
-function RolePill({ row }: { row: ContactSummary }) {
-  if (row.isSuppressed) {
-    return <span className="pill pill-suppressed">Suppressed</span>;
-  }
-  if (!row.role) return <span className="muted">—</span>;
-  return <span className={`pill pill-role-${row.role}`}>{ROLE_LABEL[row.role] ?? row.role}</span>;
 }
 
 /**
@@ -143,7 +143,7 @@ function MatchPicker({
   );
 }
 
-function StoreCell({
+function CustomersCell({
   row,
   appId,
   resolving,
@@ -163,20 +163,23 @@ function StoreCell({
   return (
     <td>
       {primary ? (
-        <>
-          <a className="customer-link" href={`#/customers/${encodeURIComponent(primary.shopId)}`}>
+        <div className="contact-customer">
+          <a
+            className="customer-link contact-customer-link"
+            href={`#/customers/${encodeURIComponent(primary.shopId)}`}
+          >
             <span className="customer-name">{shopLabel(primary)}</span>
-            {primary.domain && primary.name ? (
-              <span className="customer-domain">{primary.domain}</span>
-            ) : null}
           </a>
-          {extra > 0 ? <span className="contact-extra">+{extra}</span> : null}
+          <span className="contact-role">
+            {ROLE_LABEL[primary.role] ?? primary.role}
+            {extra > 0 ? ` · +${extra}` : ''}
+          </span>
           {primary.matchMethod === 'ambiguous' ? (
             <span className="pill pill-ambiguous" title="More than one shop answered to this domain.">
               Ambiguous
             </span>
           ) : null}
-        </>
+        </div>
       ) : (
         <span className="pill pill-ambiguous">Unlinked</span>
       )}
@@ -257,11 +260,6 @@ export function Contacts({ appId }: { appId: string }) {
       cancelled = true;
     };
   }, [debounced, linked, sort, page, appId]);
-
-  const currency = useMemo(
-    () => rows.find((row) => row.primaryShop?.currency)?.primaryShop?.currency ?? null,
-    [rows],
-  );
 
   const lastPage = Math.max(Math.ceil(total / PAGE_SIZE) - 1, 0);
 
@@ -353,10 +351,10 @@ export function Contacts({ appId }: { appId: string }) {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Email</th>
-                  <th>Store</th>
-                  <th>Role</th>
-                  <th>Store MRR</th>
+                  <th>Source</th>
+                  <th>Created</th>
+                  <th>Last seen</th>
+                  <th>Customers</th>
                   <th></th>
                 </tr>
               </thead>
@@ -368,11 +366,20 @@ export function Contacts({ appId }: { appId: string }) {
                   >
                     <td>
                       <span className="customer-name">{displayName(row)}</span>
+                      {row.isSuppressed ? (
+                        <span className="pill pill-suppressed">Suppressed</span>
+                      ) : null}
                     </td>
                     <td>
-                      <span className="customer-domain">{row.email}</span>
+                      {row.source ? (
+                        <span className={`pill pill-source-${row.source}`}>{sourceLabel(row.source)}</span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
                     </td>
-                    <StoreCell
+                    <td>{row.createdAt ? formatFullDate(row.createdAt) : '—'}</td>
+                    <td>{row.lastSeenAt ? formatFullDate(row.lastSeenAt) : '—'}</td>
+                    <CustomersCell
                       row={row}
                       appId={appId}
                       resolving={resolving === row.email}
@@ -384,14 +391,6 @@ export function Contacts({ appId }: { appId: string }) {
                         load();
                       }}
                     />
-                    <td>
-                      <RolePill row={row} />
-                    </td>
-                    <td className="tabular">
-                      {row.primaryShop
-                        ? formatValue(row.primaryShop.mrr, 'money', row.primaryShop.currency ?? currency)
-                        : '—'}
-                    </td>
                     <td>
                       <button
                         type="button"

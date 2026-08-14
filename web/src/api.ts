@@ -327,6 +327,7 @@ export interface ContactSummary {
   shops: ContactShop[];
   primaryShop: ContactShop | null;
   lastSeenAt: string | null;
+  createdAt: string | null;
 }
 
 export interface ContactListResult {

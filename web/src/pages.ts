@@ -63,6 +63,12 @@ export interface PageSpec {
    * change them afterwards.
    */
   defaults?: Partial<PageDefaults>;
+  /**
+   * Nested pages that appear under this item in the rail, only after the
+   * parent is the current section. Contacts lives under Customers this way:
+   * the child is not a sibling in the top-level list.
+   */
+  children?: PageSpec[];
 }
 
 export interface PageDefaults {
@@ -240,15 +246,6 @@ const CHURN: PageSpec = {
   ],
 };
 
-const CUSTOMERS: PageSpec = {
-  id: 'customers',
-  label: 'Customers',
-  title: 'Customers',
-  blurb: 'Every merchant, what they run today, and everything that has happened to them.',
-  kind: 'customers',
-  cards: [],
-};
-
 const CONTACTS: PageSpec = {
   id: 'contacts',
   label: 'Contacts',
@@ -256,6 +253,16 @@ const CONTACTS: PageSpec = {
   blurb: 'Every person who logs into one of your apps, and the store they belong to.',
   kind: 'contacts',
   cards: [],
+};
+
+const CUSTOMERS: PageSpec = {
+  id: 'customers',
+  label: 'Customers',
+  title: 'Customers',
+  blurb: 'Every merchant, what they run today, and everything that has happened to them.',
+  kind: 'customers',
+  cards: [],
+  children: [CONTACTS],
 };
 
 const REVIEWS: PageSpec = {
@@ -348,12 +355,16 @@ const BIGQUERY: PageSpec = {
 };
 
 export const NAV: NavGroup[] = [
-  { label: '', pages: [OVERVIEW, CUSTOMERS, CONTACTS] },
+  { label: '', pages: [OVERVIEW, CUSTOMERS] },
   { label: 'Reports', pages: [REVENUE, SUBSCRIPTIONS, CHURN, FUNNEL, REVIEWS] },
   { label: 'Settings', pages: [LISTINGS, BIGQUERY, NOTIFICATIONS] },
 ];
 
-export const PAGES: PageSpec[] = NAV.flatMap((group) => group.pages);
+function flattenPages(pages: PageSpec[]): PageSpec[] {
+  return pages.flatMap((page) => [page, ...(page.children ?? [])]);
+}
+
+export const PAGES: PageSpec[] = NAV.flatMap((group) => flattenPages(group.pages));
 
 export function pageById(id: string): PageSpec {
   return PAGES.find((page) => page.id === id) ?? OVERVIEW;

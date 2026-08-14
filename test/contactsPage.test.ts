@@ -98,6 +98,9 @@ describe('contacts list', () => {
     assert.equal(all.contacts[0]!.email, 'ada@example.com');
     assert.equal(all.contacts[0]!.primaryShop?.name, 'Acme');
     assert.equal(all.contacts[0]!.role, 'owner');
+    assert.equal(all.contacts[0]!.source, 'csv_import');
+    assert.equal(all.contacts[0]!.createdAt, '2026-08-01T00:00:00.000Z');
+    assert.equal(all.contacts[0]!.lastSeenAt, '2026-08-01T00:00:00.000Z');
 
     const byName = listContacts({ search: 'Lovelace' });
     assert.equal(byName.total, 1);
@@ -207,6 +210,21 @@ describe('contacts list', () => {
     const listed = listContacts();
     assert.equal(listed.total, 1);
     assert.equal(listed.contacts[0]!.email, 'ours@example.com');
+  });
+
+  it('orders by created_at when asked', () => {
+    insertContact({ email: 'old@example.com', firstName: 'Old', lastName: 'One', shopId: '10' });
+    getDb()
+      .prepare(`UPDATE contacts SET created_at = ? WHERE email = ?`)
+      .run('2025-01-01T00:00:00.000Z', 'old@example.com');
+    insertContact({ email: 'new@example.com', firstName: 'New', lastName: 'One', shopId: '20' });
+    getDb()
+      .prepare(`UPDATE contacts SET created_at = ? WHERE email = ?`)
+      .run('2026-08-01T00:00:00.000Z', 'new@example.com');
+
+    const newest = listContacts({ sort: 'created' });
+    assert.equal(newest.contacts[0]!.email, 'new@example.com');
+    assert.equal(newest.contacts[1]!.email, 'old@example.com');
   });
 });
 

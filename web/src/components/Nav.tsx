@@ -36,6 +36,14 @@ function Icon({ id }: { id: string }) {
 
 const SIGN_OUT_ICON = 'M13 3.5H5.5v15H13M10 11h10m0 0l-3.2-3.2M20 11l-3.2 3.2';
 
+function childIds(page: PageSpec): string[] {
+  return (page.children ?? []).map((child) => child.id);
+}
+
+function isInSection(page: PageSpec, current: string): boolean {
+  return page.id === current || childIds(page).includes(current);
+}
+
 export function Nav({
   current,
   collapsed,
@@ -48,19 +56,58 @@ export function Nav({
   /** Absent when no password is set: there is no session to end. */
   onLogout?: () => void;
 }) {
-  const item = (page: PageSpec) => (
-    <li key={page.id}>
-      <a
-        href={`#/${page.id}`}
-        className={page.id === current ? 'nav-link active' : 'nav-link'}
-        aria-current={page.id === current ? 'page' : undefined}
-        title={collapsed ? page.label : undefined}
-      >
-        <Icon id={page.id} />
-        <span className="nav-label">{page.label}</span>
-      </a>
-    </li>
-  );
+  const item = (page: PageSpec) => {
+    const children = page.children ?? [];
+    const expanded = !collapsed && children.length > 0 && isInSection(page, current);
+    const inSection = page.id !== current && isInSection(page, current);
+    const classes = [
+      'nav-link',
+      page.id === current ? 'active' : '',
+      inSection ? 'nav-link-section' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    return (
+      <li key={page.id}>
+        <a
+          href={`#/${page.id}`}
+          className={classes}
+          aria-current={page.id === current ? 'page' : undefined}
+          aria-expanded={children.length > 0 ? expanded : undefined}
+          title={collapsed ? page.label : undefined}
+        >
+          <Icon id={page.id} />
+          <span className="nav-label">{page.label}</span>
+          {children.length > 0 ? (
+            <svg
+              className={expanded ? 'nav-chevron open' : 'nav-chevron'}
+              viewBox="0 0 22 22"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M6 8l5 5 5-5" fill="none" strokeWidth="1.8" />
+            </svg>
+          ) : null}
+        </a>
+        {expanded ? (
+          <ul className="nav-children">
+            {children.map((child) => (
+              <li key={child.id}>
+                <a
+                  href={`#/${child.id}`}
+                  className={child.id === current ? 'nav-link nav-child active' : 'nav-link nav-child'}
+                  aria-current={child.id === current ? 'page' : undefined}
+                >
+                  <span className="nav-label">{child.label}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </li>
+    );
+  };
 
   return (
     <nav className={collapsed ? 'nav collapsed' : 'nav'} aria-label="Reports">
