@@ -212,6 +212,29 @@ const ORDER_BY: Record<CustomerSort, string> = {
   name: 'name ASC, domain ASC',
 };
 
+function resolveSort(sort: string | undefined): CustomerSort {
+  return ORDER_BY[sort as CustomerSort] ? (sort as CustomerSort) : 'mrr';
+}
+
+function mapSummaryRows(
+  rows: Array<SummaryRow & { everSubscribed: number }>,
+): CustomerSummary[] {
+  return rows.map((row) => ({
+    shopId: row.shopId,
+    name: row.name,
+    domain: row.domain,
+    status: statusOf(row, row.everSubscribed),
+    mrr: row.mrr,
+    currency: row.currency,
+    activeSubscriptions: row.activeSubscriptions,
+    activeInstalls: row.activeInstalls,
+    lifetimeGross: row.lifetimeGross,
+    lifetimeNet: row.lifetimeNet,
+    firstSeenAt: row.firstSeenAt,
+    lastEventAt: row.lastEventAt,
+  }));
+}
+
 export function listCustomers(options: {
   search?: string;
   limit?: number;
@@ -224,7 +247,7 @@ export function listCustomers(options: {
   const search = (options.search ?? '').trim();
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
   const offset = Math.max(options.offset ?? 0, 0);
-  const sort = ORDER_BY[options.sort ?? 'mrr'] ? (options.sort ?? 'mrr') : 'mrr';
+  const sort = resolveSort(options.sort);
 
   const built = summarySql(appIds, search.length > 0);
   const params: Record<string, unknown> = {
@@ -246,25 +269,91 @@ export function listCustomers(options: {
     .all({ ...params, limit, offset }) as Array<SummaryRow & { everSubscribed: number }>;
 
   return {
-    customers: rows.map((row) => ({
-      shopId: row.shopId,
-      name: row.name,
-      domain: row.domain,
-      status: statusOf(row, row.everSubscribed),
-      mrr: row.mrr,
-      currency: row.currency,
-      activeSubscriptions: row.activeSubscriptions,
-      activeInstalls: row.activeInstalls,
-      lifetimeGross: row.lifetimeGross,
-      lifetimeNet: row.lifetimeNet,
-      firstSeenAt: row.firstSeenAt,
-      lastEventAt: row.lastEventAt,
-    })),
+    customers: mapSummaryRows(rows),
     total,
     limit,
     offset,
     query: search,
   };
+}
+
+const STATUS_CSV_LABEL: Record<CustomerStatus, string> = {
+  paying: 'Paying',
+  trialing: 'On trial',
+  installed: 'Installed',
+  churned: 'Churned',
+  gone: 'Uninstalled',
+};
+
+/** RFC 4180 cell: quote when the value carries a comma, quote, or newline. */
+function csvCell(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const text = String(value);
+  if (/[",\r\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+/**
+ * The Customers page as a spreadsheet: same filters and columns, every matching
+ * merchant rather than one page of fifty.
+ *
+ * `last_activity` is the latest non-suppressed `customer_events.occurred_at` for
+ * that shop in scope — install, subscription, payment, review, and so on — not
+ * a login or session signal.
+ */
+export function exportCustomersCsv(options: {
+  search?: string;
+  sort?: CustomerSort;
+  appIds?: string[];
+} = {}): string {
+  const db = getDb();
+  const appIds = scope(db, options.appIds ?? []);
+  const search = (options.search ?? '').trim();
+  const sort = resolveSort(options.sort);
+
+  const built = summarySql(appIds, search.length > 0);
+  const params: Record<string, unknown> = {
+    ...built.params,
+    now: new Date().toISOString(),
+  };
+  if (search.length > 0) {
+    params.q = `%${search}%`;
+    params.exact = search;
+  }
+
+  const rows = db
+    .prepare(`${built.sql} ORDER BY ${ORDER_BY[sort]}`)
+    .all(params) as Array<SummaryRow & { everSubscribed: number }>;
+  const customers = mapSummaryRows(rows);
+
+  const header = [
+    'merchant',
+    'domain',
+    'shop_id',
+    'status',
+    'mrr',
+    'currency',
+    'paid_to_date',
+    'apps',
+    'last_activity',
+  ];
+  const lines = [header.join(',')];
+  for (const row of customers) {
+    lines.push(
+      [
+        csvCell(row.name ?? row.domain ?? row.shopId),
+        csvCell(row.domain),
+        csvCell(row.shopId),
+        csvCell(STATUS_CSV_LABEL[row.status]),
+        csvCell(row.mrr),
+        csvCell(row.currency),
+        csvCell(row.lifetimeGross),
+        csvCell(row.activeInstalls),
+        csvCell(row.lastEventAt),
+      ].join(','),
+    );
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 export interface CustomerSubscription {

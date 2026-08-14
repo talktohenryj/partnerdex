@@ -58,6 +58,7 @@ describe('the dashboard gate', () => {
       '/api/metrics',
       '/api/overview?metrics=mrr',
       '/api/customers',
+      '/api/customers/export',
       '/api/notifications',
     ]) {
       const response = await get(path);
