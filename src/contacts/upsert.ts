@@ -302,3 +302,139 @@ export function suppressContact(
     }
   })();
 }
+
+/**
+ * A human's answer for which store a contact belongs to.
+ *
+ * Writes `match_method = 'manual'`, which `upsertContact` will not overwrite —
+ * the same rule `setReviewShop` uses for reviews. An `ambiguous` guess for the
+ * same app is replaced rather than kept alongside the correction. Other
+ * memberships (a person who already manages two stores) stay put.
+ */
+export function matchContactToShop(
+  email: string,
+  input: { shopId: string; appId?: string },
+  db: Db = getDb(),
+): { email: string; shopId: string; appId: string; matchMethod: 'manual' } {
+  const normalized = normalizeEmail(email);
+  if (!normalized || !normalized.includes('@')) {
+    throw new ContactsError('email is required and must look like an email address.', 422);
+  }
+
+  const contact = db.prepare('SELECT email FROM contacts WHERE email = ?').get(normalized) as
+    | { email: string }
+    | undefined;
+  if (!contact) {
+    throw new ContactsError(`No contact with email ${normalized}.`, 404);
+  }
+
+  const shopId = input.shopId?.trim() ?? '';
+  if (!shopId) {
+    throw new ContactsError('shopId is required.', 422);
+  }
+  const shop = db.prepare('SELECT id FROM shops WHERE id = ?').get(shopId) as
+    | { id: string }
+    | undefined;
+  if (!shop) {
+    throw new ContactsError(`No shop with id ${shopId}.`, 400);
+  }
+
+  const appId = resolveMatchAppId(db, normalized, input.appId);
+  assertAppInScope(appId, db);
+
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    // The ambiguous row is the guess being replaced. Leave auto/manual links
+    // to other shops: an agency email really can manage more than one store.
+    db.prepare(
+      `DELETE FROM contact_shops
+        WHERE email = ? AND app_id = ? AND match_method = 'ambiguous' AND shop_id <> ?`,
+    ).run(normalized, appId, shopId);
+
+    db.prepare(
+      `INSERT INTO contact_shops (
+         email, app_id, shop_id, role, match_method, first_seen_at, last_seen_at
+       ) VALUES (
+         @email, @appId, @shopId, @role, 'manual', @now, @now
+       )
+       ON CONFLICT(email, app_id, shop_id) DO UPDATE SET
+         match_method = 'manual',
+         last_seen_at = excluded.last_seen_at`,
+    ).run({
+      email: normalized,
+      appId,
+      shopId,
+      role: existingRole(db, normalized, appId, shopId),
+      now,
+    });
+  })();
+
+  return { email: normalized, shopId, appId, matchMethod: 'manual' };
+}
+
+function existingRole(db: Db, email: string, appId: string, shopId: string): ContactRole {
+  const row = db
+    .prepare(
+      `SELECT role FROM contact_shops
+        WHERE email = ? AND app_id = ? AND shop_id = ?`,
+    )
+    .get(email, appId, shopId) as { role: ContactRole } | undefined;
+  if (row?.role === 'owner' || row?.role === 'staff' || row?.role === 'collaborator') {
+    return row.role;
+  }
+  const any = db
+    .prepare(`SELECT role FROM contact_shops WHERE email = ? AND app_id = ? LIMIT 1`)
+    .get(email, appId) as { role: ContactRole } | undefined;
+  if (any?.role === 'owner' || any?.role === 'staff' || any?.role === 'collaborator') {
+    return any.role;
+  }
+  return 'staff';
+}
+
+function resolveMatchAppId(db: Db, email: string, requested?: string): string {
+  const trimmed = requested?.trim() ?? '';
+  if (trimmed) return trimmed;
+
+  const scoped = resolveScopedAppIds(db);
+  if (scoped.length === 1) return scoped[0]!;
+
+  const linked = db
+    .prepare(
+      `SELECT app_id AS appId FROM contact_shops WHERE email = ? GROUP BY app_id ORDER BY app_id`,
+    )
+    .all(email) as Array<{ appId: string }>;
+  const inScope = linked.filter((row) => scoped.includes(row.appId));
+  if (inScope.length === 1) return inScope[0]!.appId;
+  if (scoped.length === 0 && linked.length === 1) return linked[0]!.appId;
+
+  throw new ContactsError(
+    'appId is required when more than one app is in reporting scope.',
+    422,
+  );
+}
+
+/**
+ * Lift a suppression. Deletes the durable row and mirrors `contacts.is_suppressed`,
+ * so a later send-list read cannot see a stale flag with no matching register.
+ */
+export function unsuppressContact(email: string, db: Db = getDb()): void {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return;
+  const at = new Date().toISOString();
+
+  const contact = db.prepare('SELECT email FROM contacts WHERE email = ?').get(normalized) as
+    | { email: string }
+    | undefined;
+  if (!contact) {
+    throw new ContactsError(`No contact with email ${normalized}.`, 404);
+  }
+
+  db.transaction(() => {
+    db.prepare('DELETE FROM contact_suppressions WHERE email = ?').run(normalized);
+    db.prepare(
+      `UPDATE contacts
+          SET is_suppressed = 0, updated_at = ?
+        WHERE email = ?`,
+    ).run(at, normalized);
+  })();
+}

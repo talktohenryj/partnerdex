@@ -35,15 +35,16 @@ export interface PageSpec {
   blurb: string;
   cards: CardSpec[];
   /**
-   * Metric pages are a grid of cards over a shared time window. Customers and
-   * notifications are different shapes entirely — a searchable population, and
-   * a settings form — so they opt out of the window controls rather than
-   * showing filters that would not apply to them.
+   * Metric pages are a grid of cards over a shared time window. Customers,
+   * contacts, and notifications are different shapes entirely — a searchable
+   * population, a searchable people list, and a settings form — so they opt
+   * out of the window controls rather than showing filters that would not
+   * apply to them.
    *
    * Reviews is the one page that is both: cards over the shared window, and a
    * searchable list of the documents behind them.
    */
-  kind?: 'metrics' | 'customers' | 'notifications' | 'reviews' | 'listings' | 'funnel' | 'bigquery';
+  kind?: 'metrics' | 'customers' | 'contacts' | 'notifications' | 'reviews' | 'listings' | 'funnel' | 'bigquery';
   /**
    * Which shared filters this page shows, in order.
    *
@@ -248,6 +249,15 @@ const CUSTOMERS: PageSpec = {
   cards: [],
 };
 
+const CONTACTS: PageSpec = {
+  id: 'contacts',
+  label: 'Contacts',
+  title: 'Contacts',
+  blurb: 'Every person who logs into one of your apps, and the store they belong to.',
+  kind: 'contacts',
+  cards: [],
+};
+
 const REVIEWS: PageSpec = {
   id: 'reviews',
   label: 'Reviews',
@@ -338,7 +348,7 @@ const BIGQUERY: PageSpec = {
 };
 
 export const NAV: NavGroup[] = [
-  { label: '', pages: [OVERVIEW, CUSTOMERS] },
+  { label: '', pages: [OVERVIEW, CUSTOMERS, CONTACTS] },
   { label: 'Reports', pages: [REVENUE, SUBSCRIPTIONS, CHURN, FUNNEL, REVIEWS] },
   { label: 'Settings', pages: [LISTINGS, BIGQUERY, NOTIFICATIONS] },
 ];
