@@ -39,19 +39,84 @@ const LINKED_FILTERS: Array<{ value: ContactLinkedFilter; label: string }> = [
   { value: 'suppressed', label: 'Suppressed' },
 ];
 
-const SORTS = [
-  { value: 'name', label: 'Name' },
-  { value: 'created', label: 'Newest created' },
-  { value: 'recent', label: 'Last seen' },
-];
+type SortKey = 'name' | 'customer' | 'created' | 'recent';
+
+/** First click uses this direction. A second click on the same title flips it. */
+const NATURAL_SORT: Record<SortKey, string> = {
+  name: 'name',
+  customer: 'customer',
+  created: 'created',
+  recent: 'recent',
+};
+
+const FLIPPED_SORT: Record<SortKey, string> = {
+  name: 'name_desc',
+  customer: 'customer_desc',
+  created: 'created_asc',
+  recent: 'recent_asc',
+};
+
+function sortKeyOf(sort: string): SortKey | null {
+  if (sort === 'name' || sort === 'name_desc') return 'name';
+  if (sort === 'customer' || sort === 'customer_desc') return 'customer';
+  if (sort === 'created' || sort === 'created_asc') return 'created';
+  if (sort === 'recent' || sort === 'recent_asc') return 'recent';
+  return null;
+}
+
+function sortDir(sort: string): 'asc' | 'desc' {
+  return sort.endsWith('_desc') || sort === 'created' || sort === 'recent' ? 'desc' : 'asc';
+}
+
+function nextSort(current: string, key: SortKey): string {
+  if (current === NATURAL_SORT[key]) return FLIPPED_SORT[key];
+  if (current === FLIPPED_SORT[key]) return NATURAL_SORT[key];
+  return NATURAL_SORT[key];
+}
+
+function personName(row: ContactSummary): string {
+  return [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
+}
 
 function displayName(row: ContactSummary): string {
-  const name = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
-  return name || row.email;
+  return personName(row) || row.email;
 }
 
 function shopLabel(shop: ContactShop): string {
   return shop.name || shop.domain || shop.shopId;
+}
+
+function SortHeader({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  className,
+}: {
+  label: string;
+  sortKey: SortKey;
+  sort: string;
+  onSort: (sort: string) => void;
+  className?: string;
+}) {
+  const active = sortKeyOf(sort) === sortKey;
+  const dir = sortDir(sort);
+  return (
+    <th className={className} aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button
+        type="button"
+        className={active ? 'th-sort is-active' : 'th-sort'}
+        onClick={() => onSort(nextSort(sort, sortKey))}
+      >
+        {label}
+        {active ? (
+          <span className="th-sort-mark" aria-hidden="true">
+            {dir === 'asc' ? '↑' : '↓'}
+          </span>
+        ) : null}
+      </button>
+    </th>
+  );
 }
 
 function sourceLabel(source: string): string {
@@ -161,7 +226,7 @@ function CustomersCell({
   const needsMatch = !primary || primary.matchMethod === 'ambiguous' || primary.matchMethod === 'none';
 
   return (
-    <td>
+    <td className="col-customer">
       {primary ? (
         <div className="contact-customer">
           <a
@@ -196,7 +261,7 @@ function CustomersCell({
 export function Contacts({ appId }: { appId: string }) {
   const [search, setSearch] = useState('');
   const [linked, setLinked] = useState<ContactLinkedFilter>('all');
-  const [sort, setSort] = useState('name');
+  const [sort, setSort] = useState('recent');
   const [page, setPage] = useState(0);
   const [rows, setRows] = useState<ContactSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -306,17 +371,6 @@ export function Contacts({ appId }: { appId: string }) {
           </select>
         </div>
 
-        <div className="control">
-          <label htmlFor="contact-sort">Order by</label>
-          <select id="contact-sort" value={sort} onChange={(event) => setSort(event.target.value)}>
-            {SORTS.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <p className="control-note">
           {loading && rows.length === 0
             ? 'Searching…'
@@ -347,14 +401,20 @@ export function Contacts({ appId }: { appId: string }) {
       {rows.length > 0 ? (
         <div className="card full">
           <div className="table-wrap">
-            <table className="customer-table">
+            <table className="customer-table contacts-table">
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <SortHeader label="Name" sortKey="name" sort={sort} onSort={setSort} />
                   <th>Source</th>
-                  <th>Created</th>
-                  <th>Last seen</th>
-                  <th>Customers</th>
+                  <SortHeader label="Created" sortKey="created" sort={sort} onSort={setSort} />
+                  <SortHeader label="Last seen" sortKey="recent" sort={sort} onSort={setSort} />
+                  <SortHeader
+                    label="Customers"
+                    sortKey="customer"
+                    sort={sort}
+                    onSort={setSort}
+                    className="col-customer"
+                  />
                   <th></th>
                 </tr>
               </thead>
@@ -365,10 +425,17 @@ export function Contacts({ appId }: { appId: string }) {
                     className={row.isSuppressed ? 'contact-row-suppressed' : undefined}
                   >
                     <td>
-                      <span className="customer-name">{displayName(row)}</span>
-                      {row.isSuppressed ? (
-                        <span className="pill pill-suppressed">Suppressed</span>
-                      ) : null}
+                      <div className="contact-person">
+                        <span>
+                          <span className="customer-name">{displayName(row)}</span>
+                          {row.isSuppressed ? (
+                            <span className="pill pill-suppressed">Suppressed</span>
+                          ) : null}
+                        </span>
+                        {personName(row) ? (
+                          <span className="contact-email">{row.email}</span>
+                        ) : null}
+                      </div>
                     </td>
                     <td>
                       {row.source ? (

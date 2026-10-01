@@ -226,6 +226,60 @@ describe('contacts list', () => {
     assert.equal(newest.contacts[0]!.email, 'new@example.com');
     assert.equal(newest.contacts[1]!.email, 'old@example.com');
   });
+
+  it('orders by first name, and the reverse flips that order', () => {
+    insertContact({
+      email: 'zoe@example.com',
+      firstName: 'Zoe',
+      lastName: 'Anderson',
+      shopId: '10',
+    });
+    insertContact({
+      email: 'aaron@example.com',
+      firstName: 'Aaron',
+      lastName: 'Zimmerman',
+      shopId: '20',
+    });
+
+    const byFirst = listContacts({ sort: 'name' });
+    assert.deepEqual(
+      byFirst.contacts.map((row) => row.email),
+      ['aaron@example.com', 'zoe@example.com'],
+    );
+    const flipped = listContacts({ sort: 'name_desc' });
+    assert.deepEqual(
+      flipped.contacts.map((row) => row.email),
+      ['zoe@example.com', 'aaron@example.com'],
+    );
+  });
+
+  it('orders customers by account name, not by role', () => {
+    insertContact({
+      email: 'staff@example.com',
+      firstName: 'Sam',
+      lastName: 'Staff',
+      shopId: '10',
+      role: 'staff',
+    });
+    insertContact({
+      email: 'owner@example.com',
+      firstName: 'Olivia',
+      lastName: 'Owner',
+      shopId: '20',
+      role: 'owner',
+    });
+
+    const byAccount = listContacts({ sort: 'customer' });
+    assert.deepEqual(
+      byAccount.contacts.map((row) => row.primaryShop?.name),
+      ['Acme', 'Solo Store'],
+    );
+    const flipped = listContacts({ sort: 'customer_desc' });
+    assert.deepEqual(
+      flipped.contacts.map((row) => row.primaryShop?.name),
+      ['Solo Store', 'Acme'],
+    );
+  });
 });
 
 describe('manual match and suppression', () => {

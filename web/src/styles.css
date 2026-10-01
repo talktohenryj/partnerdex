@@ -2754,11 +2754,59 @@ button.primary:disabled,
 
 /* -------------------------------------------------------------- contacts */
 
-.contact-customer {
+.contact-person {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 1px;
+}
+
+.contact-customer {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.contacts-table td {
+  vertical-align: top;
+}
+
+.contacts-table th.col-customer,
+.contacts-table td.col-customer {
+  text-align: left;
+}
+
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.th-sort:hover,
+.th-sort.is-active {
+  color: var(--text-primary);
+}
+
+.th-sort:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.th-sort-mark {
+  font-size: 10px;
+  line-height: 1;
 }
 
 .contact-customer-link .customer-name {
@@ -2766,14 +2814,20 @@ button.primary:disabled,
   font-weight: 500;
 }
 
-.contact-role {
+.contact-role,
+.contact-email {
   color: var(--muted);
   font-size: 11px;
 }
 
+.contact-email {
+  overflow-wrap: anywhere;
+}
+
 .contact-row-suppressed .customer-name,
 .contact-row-suppressed .customer-domain,
-.contact-row-suppressed .contact-role {
+.contact-row-suppressed .contact-role,
+.contact-row-suppressed .contact-email {
   color: var(--muted);
 }
 
@@ -2801,7 +2855,7 @@ button.primary:disabled,
 
 .contact-customer .pill-ambiguous {
   margin-left: 0;
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .pill-suppressed {

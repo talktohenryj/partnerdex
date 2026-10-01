@@ -20,7 +20,17 @@ import type { ContactRole, MatchMethod } from './upsert.js';
  */
 
 export type ContactLinkedFilter = 'all' | 'unlinked' | 'ambiguous' | 'suppressed';
-export type ContactSort = 'name' | 'email' | 'mrr' | 'recent' | 'created';
+export type ContactSort =
+  | 'name'
+  | 'name_desc'
+  | 'email'
+  | 'mrr'
+  | 'recent'
+  | 'recent_asc'
+  | 'created'
+  | 'created_asc'
+  | 'customer'
+  | 'customer_desc';
 
 export interface ContactShop {
   shopId: string;
@@ -179,16 +189,28 @@ function whereFor(
   return { sql: `WHERE ${clauses.join(' AND ')}`, params };
 }
 
+// A person with no first name shows their email in the Name column, so that
+// email is the name key. Last name only breaks ties between the same first name.
+const firstNameKey = `lower(CASE
+           WHEN trim(IFNULL(c.first_name, '')) <> '' THEN c.first_name
+           ELSE c.email
+         END)`;
+const lastNameKey = `lower(IFNULL(c.last_name, ''))`;
+
 const ORDER_BY: Record<ContactSort, string> = {
-  name: `CASE
-           WHEN trim(IFNULL(c.first_name, '') || ' ' || IFNULL(c.last_name, '')) <> ''
-           THEN lower(trim(IFNULL(c.first_name, '') || ' ' || IFNULL(c.last_name, '')))
-           ELSE lower(c.email)
-         END ASC, c.email ASC`,
+  name: `${firstNameKey} ASC, ${lastNameKey} ASC, c.email ASC`,
+  name_desc: `${firstNameKey} DESC, ${lastNameKey} DESC, c.email DESC`,
   email: 'c.email ASC',
   mrr: 'primaryMrr DESC, c.email ASC',
   recent: 'c.last_seen_at DESC, c.email ASC',
+  recent_asc: 'c.last_seen_at ASC, c.email ASC',
   created: 'c.created_at DESC, c.email ASC',
+  created_asc: 'c.created_at ASC, c.email ASC',
+  // The Customers column shows one account. Order follows that account's name.
+  // Role picks which account is shown when a person has several. It does not
+  // order the page.
+  customer: `CASE WHEN primaryName = '' THEN 1 ELSE 0 END ASC, lower(primaryName) ASC, c.email ASC`,
+  customer_desc: `CASE WHEN primaryName = '' THEN 1 ELSE 0 END ASC, lower(primaryName) DESC, c.email ASC`,
 };
 
 interface ContactRow {
@@ -271,6 +293,27 @@ export function listContacts(
   // The displayed Store MRR is the primary shop's figure. Sorting by that
   // same number (max live MRR among linked shops) keeps the column and the
   // order in agreement when a person manages more than one store.
+  // primaryName is that same shop (owner, then highest MRR, then name) so a
+  // Customers sort follows the account name on the row.
+  const primaryNameSql = `
+    COALESCE((
+      SELECT COALESCE(NULLIF(trim(sh.name), ''), NULLIF(trim(sh.myshopify_domain), ''), cs.shop_id)
+        FROM contact_shops cs
+        LEFT JOIN shops sh ON sh.id = cs.shop_id
+        LEFT JOIN (
+          SELECT s.shop_id AS shop_id,
+                 COALESCE(SUM(s.monthly_amount), 0) AS mrr
+            FROM subscriptions s
+           WHERE ${live.sql}
+           GROUP BY s.shop_id
+        ) ls ON ls.shop_id = cs.shop_id
+       WHERE cs.email = c.email AND cs.app_id ${apps.sql}
+       ORDER BY CASE cs.role WHEN 'owner' THEN 0 WHEN 'staff' THEN 1 ELSE 2 END,
+                COALESCE(ls.mrr, 0) DESC,
+                lower(COALESCE(sh.name, sh.myshopify_domain, cs.shop_id))
+       LIMIT 1
+    ), '')
+  `;
   const primaryMrrSql = `
     COALESCE((
       SELECT MAX(shop_mrr) FROM (
@@ -291,6 +334,7 @@ export function listContacts(
            c.source AS source,
            c.last_seen_at AS lastSeenAt,
            c.created_at AS createdAt,
+           ${primaryNameSql} AS primaryName,
            ${primaryMrrSql} AS primaryMrr
       FROM contacts c
       ${where.sql}
