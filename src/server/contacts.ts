@@ -156,6 +156,7 @@ export function contactsDashboardRouter(): express.Router {
           limit: Number.isFinite(limit) ? limit : undefined,
           offset: Number.isFinite(offset) ? offset : undefined,
           appIds: appIds ? appIds.split(',').filter(Boolean) : [],
+          shopId: pick('shopId'),
         }),
       );
     } catch (error) {

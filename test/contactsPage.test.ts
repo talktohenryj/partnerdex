@@ -131,6 +131,42 @@ describe('contacts list', () => {
     assert.ok(row.primaryShop);
   });
 
+  it('filters to one store, without unlinked people, and carries per-store seen dates', () => {
+    insertContact({ email: 'owner@acme.test', firstName: 'Olive', shopId: '10', role: 'owner' });
+    insertContact({ email: 'solo@solo.test', firstName: 'Sol', shopId: '20' });
+    insertContact({ email: 'loose@nowhere.test', firstName: 'Lou' });
+    getDb()
+      .prepare(
+        `INSERT INTO contact_shops (
+           email, app_id, shop_id, role, match_method, first_seen_at, last_seen_at
+         ) VALUES ('solo@solo.test', ?, '10', 'collaborator', 'auto', ?, ?)`,
+      )
+      .run(APP_ID, '2026-09-01T00:00:00.000Z', '2026-09-20T00:00:00.000Z');
+
+    const result = listContacts({ shopId: '10' });
+    assert.deepEqual(
+      result.contacts.map((row) => row.email).sort(),
+      ['owner@acme.test', 'solo@solo.test'],
+    );
+    assert.equal(result.total, 2);
+    assert.equal(result.totals.all, 2);
+
+    const sol = result.contacts.find((row) => row.email === 'solo@solo.test')!;
+    // Every store the person manages comes back, not only the filtered one.
+    assert.equal(sol.shops.length, 2);
+    const here = sol.shops.find((shop) => shop.shopId === '10')!;
+    assert.equal(here.role, 'collaborator');
+    assert.equal(here.firstSeenAt, '2026-09-01T00:00:00.000Z');
+    assert.equal(here.lastSeenAt, '2026-09-20T00:00:00.000Z');
+    assert.equal(sol.firstSeenAt, '2026-08-01T00:00:00.000Z');
+  });
+
+  it('returns nobody for a store with no linked contacts', () => {
+    insertContact({ email: 'owner@acme.test', firstName: 'Olive', shopId: '10', role: 'owner' });
+    insertContact({ email: 'loose@nowhere.test', firstName: 'Lou' });
+    assert.equal(listContacts({ shopId: '30' }).total, 0);
+  });
+
   it('pulls live store MRR from the existing as-of predicate', () => {
     seed(
       [
@@ -404,6 +440,15 @@ describe('GET /api/contacts dashboard routes', () => {
 
   it('lists contacts without an ingest token (dashboard session)', async () => {
     const response = await fetch(`${origin}/api/contacts`);
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as { total: number; contacts: Array<{ email: string }> };
+    assert.equal(body.total, 1);
+    assert.equal(body.contacts[0]!.email, 'ada@example.com');
+  });
+
+  it('filters by shopId on the query string', async () => {
+    insertContact({ email: 'elsewhere@example.com', firstName: 'Else' });
+    const response = await fetch(`${origin}/api/contacts?shopId=10`);
     assert.equal(response.status, 200);
     const body = (await response.json()) as { total: number; contacts: Array<{ email: string }> };
     assert.equal(body.total, 1);

@@ -950,6 +950,46 @@ thead th {
   color: var(--text-primary);
 }
 
+/* Sections of one merchant's page. Links, not buttons, so each tab has a URL. */
+.page-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.page-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.page-tab:hover {
+  color: var(--text-primary);
+}
+
+.page-tab.is-active {
+  color: var(--brand-accent);
+  border-bottom-color: var(--brand-accent);
+}
+
+.page-tab-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 .customer-title {
   margin: 6px 0 2px;
   font-size: 20px;
@@ -2880,4 +2920,47 @@ button.primary:disabled,
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------- customer contacts tab */
+.contact-open {
+  font-size: inherit;
+  font-weight: 500;
+}
+
+.contact-modal-name {
+  margin: 0;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.contact-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+  margin: 18px 0 0;
+}
+
+.contact-facts dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.contact-facts dd {
+  margin: 2px 0 0;
+}
+
+.contact-modal-section {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+@media (max-width: 560px) {
+  .contact-facts {
+    grid-template-columns: 1fr;
+  }
 }

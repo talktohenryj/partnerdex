@@ -154,14 +154,19 @@ function ThemeToggle({ theme, onToggle }: { theme: 'dark' | 'light'; onToggle: (
  * can be linked and survives a reload, and the server's catch-all never has to
  * know about client routes.
  *
- * One segment deep is enough — `#/customers/12345` opens one merchant — which
- * keeps a single merchant as linkable as a report.
+ * `#/customers/12345` opens one merchant, which keeps a single merchant as
+ * linkable as a report. An optional third segment picks a section of that
+ * page — `#/customers/12345/contacts` — so a tab is linkable too.
  */
-function useRoute(): { pageId: string; param: string } {
+function useRoute(): { pageId: string; param: string; section: string } {
   const read = () => {
     const raw = window.location.hash.replace(/^#\/?/, '');
-    const [pageId = 'overview', param = ''] = raw.split('/');
-    return { pageId: pageId || 'overview', param: decodeURIComponent(param) };
+    const [pageId = 'overview', param = '', section = ''] = raw.split('/');
+    return {
+      pageId: pageId || 'overview',
+      param: decodeURIComponent(param),
+      section: decodeURIComponent(section),
+    };
   };
   const [route, setRoute] = useState(read);
 
@@ -609,7 +614,7 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
 
         {isCustomers ? (
           route.param ? (
-            <CustomerDetail shopId={route.param} appId={query.appId} />
+            <CustomerDetail shopId={route.param} appId={query.appId} section={route.section} />
           ) : (
             <Customers appId={query.appId} />
           )
