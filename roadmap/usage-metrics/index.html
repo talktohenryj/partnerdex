@@ -1,0 +1,121 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Usage Metrics — Overview</title><style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
+--ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
+--brand:#f0a36b;--brand-soft:#33241a;--ok:#6fd3a0;--ok-soft:#173326;--warn:#f2c14e;--warn-soft:#332a12;--info:#8fb5ff;--info-soft:#1a2540;--code:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+nav.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px}
+nav.top a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px;font-size:13px}
+nav.top a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-top:8px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
+ol.build>li{margin:0 0 14px}ol.build b{display:block}
+.note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
+.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
+.mtile .d{font-size:12px;color:var(--ok)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
+.pill.on{border-color:var(--brand);color:var(--brand)}
+</style></head><body><nav class="top"><a href="index.html" class="on">Overview</a><a href="sprint-1.html">S1 · Ingest</a><a href="sprint-2.html">S2 · iziGift producer</a><a href="sprint-3.html">S3 · Metric definitions</a><a href="sprint-4.html">S4 · Customer page</a><a href="sprint-5.html">S5 · Reports (open)</a></nav><main>
+<h1>Usage Metrics</h1>
+<p class="sub">Mantle-style usage events and per-customer usage metrics, inside PartnerDex. Fork-only for now. Planned 2026-10-02.</p>
+
+<div class="note">An app pushes <b>usage events</b> (for iziGift: one <code>order</code> event per paid order, with <code>usdOrderTotal</code>, <code>usdUpsellRevenue</code>, …). PartnerDex stores them raw. Henry then defines <b>usage metrics</b> in the dashboard — "Total Revenue = sum of <code>usdOrderTotal</code> on <code>order</code>" — and every customer page shows those metrics over a chosen window. Same model as Mantle, but the data lives next to MRR, churn and contacts in one SQLite file.</div>
+
+<h2>Status board</h2>
+<div class="tw"><table>
+<tr><th>Sprint</th><th>What ships</th><th>Repo</th><th>Status</th></tr>
+<tr><td><a href="sprint-1.html">S1 · Ingest + raw events</a></td><td><code>usage_events</code> table (migration 4), <code>POST /api/usage/ingest</code>, raw "Usage events" page</td><td>partnerdex</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-2.html">S2 · iziGift producer</a></td><td>Dual-write the Mantle <code>order</code> event to PartnerDex + a backfill command</td><td>iziGift-shopify</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-3.html">S3 · Metric definitions</a></td><td><code>usage_metrics</code> table (migration 5), CRUD API, "Usage metrics" settings page with live preview</td><td>partnerdex</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-4.html">S4 · Customer page</a></td><td>"Usage" card on the customer page, window picker, values per metric</td><td>partnerdex</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-5.html">S5 · Reports</a></td><td>Leaderboard, customer-list column, metric over time — open questions only</td><td>partnerdex</td><td><span class="chip open">Not designed</span></td></tr>
+</table></div>
+
+<h3>Dependency graph</h3>
+<pre>S1 ingest ──┬──► S2 iziGift producer   (needs the endpoint to exist)
+            └──► S3 metric definitions ──► S4 customer page ──► S5 reports
+S2 and S3 run in parallel once S1 is live.</pre>
+
+<h2>The problem today</h2>
+<ul>
+<li><b>Mantle holds the usage data, PartnerDex does not.</b> iziGift sends one <code>order</code> usage event per paid order from <code>app/Jobs/TrackMantleOrderEvent.php</code> (dispatched in <code>OrdersPaidJob.php:120</code>) via <code>APIService::trackMantleUsageEvent()</code>. Nothing sends it anywhere else.</li>
+<li><b>Mantle's customer page shows "Something went wrong — You are not authorized to access this metric"</b> on every usage metric (Total Orders, Total Revenue, GC Dollars Redeemed, Upsell Revenue, Store Credit Dollars Redeemed). The data that made the page useful is not reachable today.</li>
+<li><b>PartnerDex has no usage rail.</b> It knows Partner API money (MRR, charges) and contacts. It has no table for app-side events, no ingest route for them, and no metric definition layer. <code>CustomerDetail</code> (<code>src/customers/index.ts:306</code>) has no usage field.</li>
+<li><b>SQL works but is slow to use.</b> Henry can answer "how much upsell revenue did shop X make last 30 days" with SQL on the iziGift DB. The point of this feature is a click, not a query.</li>
+</ul>
+
+<h2>What exists today vs the gap</h2>
+<div class="tw"><table>
+<tr><th>Reuse (do not rebuild)</th><th>Where</th><th>Used by</th></tr>
+<tr><td>Bearer-token machine ingest, mounted ahead of <code>requireAuth</code></td><td><code>src/server/contacts.ts</code> <code>requireIngestToken</code>, <code>bearerMatches</code>; mount at <code>src/server/index.ts:105</code></td><td>S1</td></tr>
+<tr><td>Shop resolution by <code>shopId</code> or <code>myshopifyDomain</code></td><td><code>resolveShopMatch()</code> + <code>normalizeDomain()</code> in <code>src/contacts/upsert.ts:57,102</code></td><td>S1</td></tr>
+<tr><td>App-in-scope guard</td><td><code>assertAppInScope()</code> in <code>src/contacts/upsert.ts:67</code></td><td>S1</td></tr>
+<tr><td>Versioned durable schema</td><td><code>MIGRATIONS</code> in <code>src/db/migrate.ts</code> (1, 2 upstream; 3 contacts)</td><td>S1 (v4), S3 (v5)</td></tr>
+<tr><td>Error envelope</td><td><code>sendError()</code> in <code>src/server/errors.ts</code></td><td>S1, S3, S4</td></tr>
+<tr><td>Page registry + nav</td><td><code>web/src/pages.ts</code> (<code>PageSpec</code>, <code>kind</code>, <code>children</code>)</td><td>S1, S3</td></tr>
+<tr><td>Customer page tabs</td><td><code>web/src/components/CustomerDetail.tsx:581</code> (<code>page-tabs</code>)</td><td>S4</td></tr>
+<tr><td>iziGift → PartnerDex HTTP job</td><td><code>app/Jobs/SyncContactToPartnerDexJob.php</code> (<code>dispatchIfConfigured</code>, <code>background</code> queue, backoff)</td><td>S2</td></tr>
+<tr><td>iziGift USD conversion + redemption lookup</td><td><code>TrackMantleOrderEvent::handle()</code> builds the exact property set</td><td>S2</td></tr>
+</table></div>
+
+<h2>What / Where / Sprint</h2>
+<div class="tw"><table>
+<tr><th>What</th><th>Where</th><th>Sprint</th></tr>
+<tr><td>Raw usage events</td><td><code>usage_events(app_id, event_name, event_id, shop_id, shop_domain, occurred_at, properties JSON, received_at)</code>, PK <code>(app_id, event_name, event_id)</code></td><td>S1</td></tr>
+<tr><td>Ingest</td><td><code>POST /api/usage/ingest</code> — one event or <code>{events:[…]}</code> up to 500; env <code>USAGE_INGEST_TOKEN</code></td><td>S1</td></tr>
+<tr><td>Raw event browse</td><td><code>GET /api/usage/events?appId&amp;eventName&amp;shopId&amp;q&amp;limit&amp;offset</code>; page <code>usage-events</code></td><td>S1</td></tr>
+<tr><td>Producer</td><td>iziGift <code>SyncUsageEventToPartnerDexJob</code>, env <code>PARTNERDEX_USAGE_INGEST_URL</code> / <code>PARTNERDEX_USAGE_INGEST_TOKEN</code>; artisan <code>partnerdex:backfill-usage</code></td><td>S2</td></tr>
+<tr><td>Metric definitions</td><td><code>usage_metrics(id, app_id, name, event_name, method count|sum, property, filters JSON, show_on_customer, position, …)</code></td><td>S3</td></tr>
+<tr><td>Metric CRUD + preview</td><td><code>GET/POST/PUT/DELETE /api/usage/metrics</code>, <code>GET /api/usage/metrics/preview</code></td><td>S3</td></tr>
+<tr><td>Metric values per customer</td><td><code>GET /api/customers/:shopId/usage?window=30d</code> → <code>computeCustomerUsage()</code> in <code>src/usage/compute.ts</code></td><td>S4</td></tr>
+</table></div>
+
+<h2>Why each sprint ships alone</h2>
+<p><b>S1 alone.</b> It adds one table through a new migration and one new route. No existing code reads the table, so nothing that works today can break. On its own it starts the history clock: every event a producer sends from day one is kept, and the raw events page lets Henry see them. Usage data cannot be recovered later the way Partner API data can, so starting capture early is the value.</p>
+<p><b>S2 alone (after S1).</b> It is a dual-write. The Mantle job stays exactly as it is. If PartnerDex is down or unconfigured, <code>dispatchIfConfigured</code> does nothing and the Mantle path is unaffected. The backfill puts past redemption orders into PartnerDex so S3/S4 open with some history (see Q5 — iziGift keeps no full orders table).</p>
+<p><b>S3 alone.</b> Definitions plus a preview over the raw events. Henry can define "Total Revenue" and see the aggregate for any customer from the settings page before the customer page knows about it.</p>
+<p><b>S4.</b> Pure read path over S1 + S3 tables. If no metric is flagged <code>show_on_customer</code>, the card does not render — the customer page looks the same as today.</p>
+
+<h2>Design decisions (taken)</h2>
+<ul>
+<li><b>Compute at read time, no rollup table.</b> Same reason as <code>src/customers/index.ts</code>: one shop's events over a window are a few thousand rows; SQLite with an index on <code>(app_id, shop_id, event_name, occurred_at)</code> answers in milliseconds, and a rollup could silently disagree.</li>
+<li><b>Re-sending the same <code>event_id</code> overwrites.</b> Mantle does this and iziGift depends on it (<code>TestMantleOverwrite</code>, <code>ZeroMantleBackfillEventsJob</code>). Upsert on <code>(app_id, event_name, event_id)</code>.</li>
+<li><b>Properties are stored as JSON, summed with <code>json_extract</code>.</b> iziGift sends numbers as strings (<code>"13.03"</code>), so the sum uses <code>CAST(json_extract(properties, '$.' || property) AS REAL)</code>.</li>
+<li><b>Store the domain as well as the resolved shop.</b> An event can arrive before the Partner API sync knows the shop. Keep <code>shop_domain</code>; re-resolve rows with an empty <code>shop_id</code> after each sync.</li>
+<li><b>Durable (Role 4).</b> Usage events cannot be re-synced from anywhere. Migrations, not <code>SCHEMA_SQL</code>, and not wiped by <code>rebuild</code>.</li>
+<li><b>Separate token.</b> <code>USAGE_INGEST_TOKEN</code>, not <code>CONTACTS_INGEST_TOKEN</code>, so one leaked producer secret does not open both doors.</li>
+</ul>
+
+<h2>Open questions (decide before the named sprint)</h2>
+<div class="tw"><table>
+<tr><th>#</th><th>Question</th><th>Default if no answer</th><th>Blocks</th></tr>
+<tr><td>Q1</td><td>Migration number 4: does upstream <code>main</code> have a migration 4 yet? (fork <code>CLAUDE.md</code> rule)</td><td>Check upstream before S1 merges; renumber if taken</td><td>S1</td></tr>
+<tr><td>Q2</td><td>Is iziGift's <code>shopify_id</code> the same number as the Partner API shop gid tail?</td><td>Send <code>myshopifyDomain</code> only; resolve by domain</td><td>S1, S2</td></tr>
+<tr><td>Q3</td><td>Keep the Mantle usage events running after S4, or turn them off?</td><td>Keep both until S4 has run for 30 days</td><td>S2</td></tr>
+<tr><td>Q4</td><td>Upstream this to Aditya, or fork-only?</td><td>Fork-only; nothing iziGift-specific is in PartnerDex code, so it can go up later</td><td>none</td></tr>
+<tr><td>Q5</td><td>iziGift keeps no orders table, so a DB backfill covers redemption orders only. Also pull non-redemption orders from the Shopify Admin API? (<code>read_orders</code> gives 60 days; older needs <code>read_all_orders</code>; must follow the <code>shopify-api-retry</code> skill.)</td><td>Redemption orders only, last 365 days; full order history starts at go-live</td><td>S2</td></tr>
+</table></div>
+
+<h2>Deliberately out of scope</h2>
+<ul>
+<li>Billing on usage (Mantle usage-based charges). PartnerDex reads money from the Partner API; it does not bill.</li>
+<li>Funnel events / "App events" (Mantle's other two event types). The ingest shape allows them later; no UI for them here.</li>
+<li>Currency conversion in PartnerDex. The producer sends USD figures (<code>usd*</code>) and originals; PartnerDex sums what it gets.</li>
+<li>A public SDK. iziGift's PHP job is the only producer.</li>
+<li>Per-property filters in the UI (Mantle's "Filter by properties"). Column exists in S3; UI is S5 or later.</li>
+</ul>
+
+</main></body></html>

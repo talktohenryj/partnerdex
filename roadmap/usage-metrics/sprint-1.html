@@ -1,0 +1,130 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Usage Metrics — S1 · Ingest</title><style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
+--ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
+--brand:#f0a36b;--brand-soft:#33241a;--ok:#6fd3a0;--ok-soft:#173326;--warn:#f2c14e;--warn-soft:#332a12;--info:#8fb5ff;--info-soft:#1a2540;--code:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+nav.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px}
+nav.top a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px;font-size:13px}
+nav.top a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-top:8px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
+ol.build>li{margin:0 0 14px}ol.build b{display:block}
+.note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
+.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
+.mtile .d{font-size:12px;color:var(--ok)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
+.pill.on{border-color:var(--brand);color:var(--brand)}
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html" class="on">S1 · Ingest</a><a href="sprint-2.html">S2 · iziGift producer</a><a href="sprint-3.html">S3 · Metric definitions</a><a href="sprint-4.html">S4 · Customer page</a><a href="sprint-5.html">S5 · Reports (open)</a></nav><main>
+<h1>Sprint 1 — Ingest + raw usage events</h1>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · migration 4</p>
+
+<h2>Why this ships now</h2>
+<p>PartnerDex has no place to put app-side events. Every day without the table is a day of usage history that is gone for good — the Partner API cannot replay it. This sprint opens the door and keeps everything that comes through it.</p>
+
+<h2>Why this is independently deployable</h2>
+<p>One new migration that only creates tables, one new router, one new page. No existing query reads <code>usage_events</code>. With <code>USAGE_INGEST_TOKEN</code> unset the endpoint answers 503 and nothing else changes. Foundation-only on the read side, but it is split out so S2 can start writing (and history can start piling up) while S3 is still being built.</p>
+
+<h2>Build</h2>
+<ol class="build">
+<li><b>Migration 4 — <code>src/db/migrate.ts</code></b>
+Add <code>USAGE_SCHEMA_SQL</code> next to <code>CONTACTS_SCHEMA_SQL</code> and a <code>{ version: 4, up: (db) =&gt; db.exec(USAGE_SCHEMA_SQL) }</code> entry. Check upstream <code>main</code> for a migration 4 first (fork <code>CLAUDE.md</code>); renumber if it exists.
+<pre>CREATE TABLE IF NOT EXISTS usage_events (
+  app_id       TEXT NOT NULL,
+  event_name   TEXT NOT NULL,
+  event_id     TEXT NOT NULL,
+  shop_id      TEXT NOT NULL DEFAULT '',   -- '' until resolved
+  shop_domain  TEXT NOT NULL DEFAULT '',   -- normalizeDomain() output
+  occurred_at  TEXT NOT NULL,              -- canonical UTC ISO
+  properties   TEXT NOT NULL DEFAULT '{}', -- JSON object
+  received_at  TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
+  PRIMARY KEY (app_id, event_name, event_id)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_usage_shop ON usage_events (app_id, shop_id, event_name, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_usage_time ON usage_events (app_id, event_name, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_usage_domain ON usage_events (shop_domain) WHERE shop_id = '';</pre>
+Update the Role 4 list in the header comment of <code>src/db/schema.ts</code> to name <code>usage_events</code>.</li>
+
+<li><b>Config — <code>src/config.ts</code></b>
+Add <code>usageIngestToken()</code> beside <code>contactsIngestToken()</code> (line 136), read <code>USAGE_INGEST_TOKEN</code>, expose as <code>auth.usageIngestToken</code>. Add the variable to <code>.env.example</code> under <code>CONTACTS_INGEST_TOKEN</code> and to <code>test/helpers.ts</code> <code>resetEnvironment()</code> as <code>''</code>.</li>
+
+<li><b>Shared bearer guard — <code>src/server/ingestAuth.ts</code> (new)</b>
+Move <code>bearerMatches</code> and <code>requireIngestToken</code> out of <code>src/server/contacts.ts</code> into a factory <code>requireBearer(tokenFn, label)</code>. <code>contactsRouter()</code> calls <code>requireBearer(() =&gt; getConfig().auth.contactsIngestToken, 'Contacts')</code>. Today's 503/401 messages stay byte-identical for contacts (the existing <code>test/contactsIngest.test.ts</code> proves it).</li>
+
+<li><b>Writer — <code>src/usage/ingest.ts</code> (new)</b>
+<code>upsertUsageEvents(events: UsageEventInput[], db = getDb()): { accepted: number; unresolved: number }</code>.
+Per event: <code>assertAppInScope(appId)</code>; validate <code>eventName</code> (<code>/^[a-z0-9_.:-]{1,64}$/i</code>), <code>eventId</code> (1–200 chars), <code>properties</code> is a plain object with ≤ 50 keys and scalar values; <code>occurredAt</code> parses (default now) and is stored via <code>new Date(x).toISOString()</code>. Resolve the shop with <code>resolveShopMatch(db, { shopId, myshopifyDomain })</code> from <code>src/contacts/upsert.ts</code>; on <code>'none'</code> store <code>shop_id = ''</code>. One transaction for the batch. SQL: <code>INSERT … ON CONFLICT(app_id, event_name, event_id) DO UPDATE SET shop_id, shop_domain, occurred_at, properties, updated_at</code> (overwrite, Mantle semantics; <code>received_at</code> keeps its first value). Throw <code>ContactsError</code>-style <code>UsageError(message, 422)</code> on bad input; a bad event fails the whole batch with its index in the message.</li>
+
+<li><b>Late shop resolution — <code>src/usage/ingest.ts</code> <code>resolvePendingUsageShops(db)</code></b>
+<code>UPDATE usage_events SET shop_id = (SELECT id FROM shops WHERE lower(trim(myshopify_domain)) = usage_events.shop_domain ORDER BY id LIMIT 1) WHERE shop_id = '' AND shop_domain &lt;&gt; '' AND EXISTS (…)</code>. Call it at the end of the sync run in <code>src/sync/index.ts</code>, after shops are upserted. Not part of <code>rebuildDerivedTables</code> — this table is durable.</li>
+
+<li><b>Router — <code>src/server/usage.ts</code> (new)</b>
+<code>usageIngestRouter()</code>: <code>POST /ingest</code> behind <code>requireBearer(usageIngestToken)</code>. Body is one event or <code>{ events: [...] }</code> (max 500). Event shape:
+<pre>{ "appId": "1234", "eventName": "order", "eventId": "5551234",
+  "myshopifyDomain": "team-outfitters-sarnia.myshopify.com",   // or "shopId"
+  "occurredAt": "2026-10-01T06:01:00Z",
+  "properties": { "usdOrderTotal": "13.03", "originalCurrency": "GBP", ... } }</pre>
+Returns <code>{ accepted, unresolved }</code>.
+<code>usageDashboardRouter()</code>: <code>GET /events</code> with <code>appId, eventName, shopId, q</code> (matches domain / shop name), <code>from, to, limit (≤200), offset</code>; returns rows joined to <code>shops.name</code>, plus <code>total</code> and <code>eventNames</code> (distinct, for the filter).</li>
+
+<li><b>Mount — <code>src/server/index.ts</code></b>
+The global <code>express.json({ limit: '64kb' })</code> at line 91 would reject a 500-event batch. Mount <code>app.use('/api/usage', express.json({ limit: '1mb' }), usageIngestRouter())</code> <i>above</i> line 91, then <code>app.use('/api/usage', usageDashboardRouter())</code> after <code>requireAuth</code> next to the contacts dashboard router (line 117).</li>
+
+<li><b>Page — <code>web/src/components/UsageEvents.tsx</code> (new)</b>
+Add <code>USAGE_EVENTS: PageSpec</code> (<code>id: 'usage-events'</code>, <code>kind: 'usage-events'</code>, label "Usage events") to <code>web/src/pages.ts</code> as a child of <code>CUSTOMERS</code> next to <code>CONTACTS</code>, and extend the <code>kind</code> union. In <code>web/src/App.tsx</code> add <code>isUsageEvents</code> beside <code>isContacts</code> (line 268). Table: time, shop (link to the customer page when resolved, else the domain in muted text with "unmatched"), event name, then properties as <code>key: value</code> lines — the layout of Mantle's preview column. Filters: event name select, customer search. API helper <code>fetchUsageEvents()</code> in <code>web/src/api.ts</code>.</li>
+
+<li><b>CLI — <code>src/cli.ts</code></b>
+<code>partnerdex usage:events [--app ID] [--event NAME] [--shop DOMAIN] [--limit N]</code> prints recent rows as JSON lines. Useful to check S2 from Fly without the UI.</li>
+
+<li><b>Docs</b> — README section "Usage events" with the curl example; <code>DEPLOY.md</code>: set <code>USAGE_INGEST_TOKEN</code> as a Fly secret.</li>
+</ol>
+
+<h2>Acceptance</h2>
+<div class="tw"><table>
+<tr><th>Scenario</th><th>Expected</th></tr>
+<tr><td>POST with no token configured</td><td>503, "Usage ingest is disabled. Set USAGE_INGEST_TOKEN…"</td></tr>
+<tr><td>POST with wrong bearer</td><td>401</td></tr>
+<tr><td>POST one valid <code>order</code> event for a known domain</td><td>200 <code>{accepted:1, unresolved:0}</code>; row has the shop's id</td></tr>
+<tr><td>Same <code>eventId</code> sent again with a different <code>usdOrderTotal</code></td><td>One row; properties replaced; <code>received_at</code> unchanged</td></tr>
+<tr><td>Event for a domain the sync has not seen</td><td><code>unresolved:1</code>, <code>shop_id=''</code>; after next sync with that shop, <code>shop_id</code> filled</td></tr>
+<tr><td>Batch of 3 where #2 has no <code>eventId</code></td><td>422 naming index 1; zero rows written</td></tr>
+<tr><td>Batch of 501</td><td>422</td></tr>
+<tr><td>Batch of 500 (~600 KB)</td><td>200 (not 413)</td></tr>
+<tr><td><code>appId</code> not in <code>PARTNER_APP_IDS</code> scope</td><td>422 from <code>assertAppInScope</code></td></tr>
+<tr><td><code>partnerdex rebuild</code></td><td><code>usage_events</code> rows survive</td></tr>
+<tr><td>Contacts ingest after the guard refactor</td><td>Same status codes and messages as before</td></tr>
+<tr><td>Open Customers → Usage events</td><td>Newest first; filter by <code>order</code>; click a shop → customer page</td></tr>
+</table></div>
+
+<h2>Explicitly NOT in this sprint</h2>
+<ul><li>Metric definitions, sums, windows (S3/S4).</li><li>Any iziGift change (S2).</li><li>Deleting events. A producer zeroes an event by re-sending it, the same way iziGift does with Mantle.</li></ul>
+
+<h2>Tests — <code>test/usageIngest.test.ts</code>, <code>test/usageMigrate.test.ts</code></h2>
+<ul>
+<li><code>rejects ingest with 503 when USAGE_INGEST_TOKEN is unset</code></li>
+<li><code>rejects a wrong bearer with 401</code></li>
+<li><code>stores an event and resolves the shop by domain</code></li>
+<li><code>overwrites properties when the same event id is re-sent</code></li>
+<li><code>keeps an unmatched event and resolves it after the shop syncs</code></li>
+<li><code>rolls back the whole batch when one event is invalid</code></li>
+<li><code>accepts a 500-event batch above the global 64kb body limit</code></li>
+<li><code>usage_events survives rebuildDerivedTables</code></li>
+<li><code>migration 4 creates usage_events and is idempotent on replay</code> (extend <code>test/migrate.test.ts</code> sequence check: 1,2,3,4)</li>
+<li><code>contacts ingest keeps its 503/401 messages</code> (existing suite, must stay green)</li>
+</ul>
+
+</main></body></html>

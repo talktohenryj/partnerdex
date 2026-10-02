@@ -1,0 +1,93 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Usage Metrics — S2 · iziGift producer</title><style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
+--ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
+--brand:#f0a36b;--brand-soft:#33241a;--ok:#6fd3a0;--ok-soft:#173326;--warn:#f2c14e;--warn-soft:#332a12;--info:#8fb5ff;--info-soft:#1a2540;--code:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+nav.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px}
+nav.top a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px;font-size:13px}
+nav.top a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-top:8px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
+ol.build>li{margin:0 0 14px}ol.build b{display:block}
+.note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
+.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
+.mtile .d{font-size:12px;color:var(--ok)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
+.pill.on{border-color:var(--brand);color:var(--brand)}
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Ingest</a><a href="sprint-2.html" class="on">S2 · iziGift producer</a><a href="sprint-3.html">S3 · Metric definitions</a><a href="sprint-4.html">S4 · Customer page</a><a href="sprint-5.html">S5 · Reports (open)</a></nav><main>
+<h1>Sprint 2 — iziGift producer (dual-write + backfill)</h1>
+<p class="sub"><span class="chip todo">Not started</span> · repo: iziGift-shopify · app code → feature branch + PR (not <code>master</code>)</p>
+
+<h2>Why this ships now</h2>
+<p>S1 gives PartnerDex a door. Nothing walks through it until iziGift sends events. iziGift already builds the exact payload Henry wants — <code>TrackMantleOrderEvent::handle()</code> computes USD order total, upsell revenue, gift card and store credit dollars redeemed — and sends it only to Mantle, where the customer page now shows "not authorized" for every metric.</p>
+
+<h2>Why this is independently deployable</h2>
+<p>It is a second, separate job. <code>TrackMantleOrderEvent</code> is not edited in its sending behavior; Mantle keeps getting the same event. The new job uses <code>dispatchIfConfigured</code>, so with the two env vars unset in production nothing is queued. A PartnerDex outage only fails a <code>background</code> job with backoff — never the order flow.</p>
+
+<h2>Build</h2>
+<ol class="build">
+<li><b>Extract the payload — <code>app/Services/UsageOrderEventPayload.php</code> (new)</b>
+Move the property-building block from <code>TrackMantleOrderEvent::handle()</code> (the <code>convertToUSD</code> calls, the <code>OrderRedemption</code> lookup by <code>user_id</code> + <code>shopify_order_id</code>, the <code>number_format</code> array) into <code>build(User $shop, $order): array</code>. <code>TrackMantleOrderEvent</code> calls it; its Mantle request body stays byte-identical. Pin that with a test before moving the code.</li>
+
+<li><b>Config — <code>config/services.php</code></b>
+Extend the existing <code>partnerdex</code> block (line 88): <code>'usage_ingest_url' =&gt; env('PARTNERDEX_USAGE_INGEST_URL')</code>, <code>'usage_ingest_token' =&gt; env('PARTNERDEX_USAGE_INGEST_TOKEN')</code>. Reuse <code>app_id</code>. Add both to <code>.env.example</code>.</li>
+
+<li><b>Job — <code>app/Jobs/SyncUsageEventToPartnerDexJob.php</code> (new)</b>
+Copy the shape of <code>SyncContactToPartnerDexJob</code>: <code>$queue = 'background'</code>, <code>$tries = 5</code>, <code>$backoff = [60,120,300,600]</code>, <code>isConfigured()</code>, <code>dispatchIfConfigured(array $payloadOrBatch)</code>, <code>Http::withToken()->timeout(10)->post()</code>. Body:
+<pre>{ appId, eventName: "order", eventId: (string) $order-&gt;id,
+  myshopifyDomain: $shop-&gt;name, occurredAt: order processed_at (ISO),
+  properties: UsageOrderEventPayload::build($shop, $order) }</pre>
+Accepts a batch (<code>{events:[…]}</code>) for the backfill. 4xx other than 429 → log and stop (no retry); 5xx/429/timeouts → release with backoff.</li>
+
+<li><b>Dispatch — <code>app/Jobs/OrdersPaidJob.php</code></b>
+Next to <code>TrackMantleOrderEvent::dispatch(...)</code> at line 120, add <code>SyncUsageEventToPartnerDexJob::dispatchIfConfigured(...)</code> with the same <code>$shop</code> and <code>$order</code>. Same <code>->delay(now()->addSeconds(5))</code> the Mantle dispatch uses, so the <code>OrderRedemption</code> row exists when the payload is built.</li>
+
+<li><b>Backfill — <code>app/Console/Commands/PartnerDexBackfillUsage.php</code> (new)</b>
+<b>Limit:</b> iziGift stores no orders table. The only order history it keeps is <code>order_redemptions</code> (orders that used a gift card or store credit). So a backfill from the DB covers <i>redemption orders only</i> — the same set <code>BackfillMantleRedemptionEventsJob</code> covered. Total Orders / Total Revenue for non-redemption orders start at go-live (open question Q5).
+<code>partnerdex:backfill-usage {--days=365} {--shop=} {--batch=200} {--dry-run}</code>. Query <code>OrderRedemption::where('user_id', …)</code> the way <code>BackfillMantleRedemptionEventsJob.php:49</code> does. Event id = <code>(string) $redemption-&gt;shopify_order_id</code> — the same id the live job sends (<code>BackfillMantleRedemptionEventsJob.php:78</code>), so a later live event or a re-run overwrites and never duplicates. Skip shops with <code>potentially_closed_at</code> set. Dispatch one <code>SyncUsageEventToPartnerDexJob</code> per batch of 200. <code>--dry-run</code> prints counts per shop only.</li>
+
+<li><b>Deploy notes</b> — In PartnerDex set <code>USAGE_INGEST_TOKEN</code> (Fly secret). In Forge set <code>PARTNERDEX_USAGE_INGEST_URL=https://&lt;partnerdex host&gt;/api/usage/ingest</code> and the token. Run the backfill with <code>--dry-run</code>, then for one shop, then all.</li>
+</ol>
+
+<h2>Acceptance</h2>
+<div class="tw"><table>
+<tr><th>Scenario</th><th>Expected</th></tr>
+<tr><td>Paid order, env vars unset</td><td>No <code>SyncUsageEventToPartnerDexJob</code> queued; Mantle job queued as before</td></tr>
+<tr><td>Paid order, env vars set</td><td>One PartnerDex job on <code>background</code>; PartnerDex row with <code>event_id</code> = order id and the 9 properties</td></tr>
+<tr><td>Order with a gift card redemption + upsell</td><td><code>usdGcDollarsRedeemed</code>, <code>usdUpsellRevenue</code> match the Mantle payload for the same order</td></tr>
+<tr><td>PartnerDex returns 503</td><td>Job released with backoff; order flow unaffected</td></tr>
+<tr><td>PartnerDex returns 422</td><td>Logged once, not retried</td></tr>
+<tr><td>Backfill run twice</td><td>PartnerDex row count unchanged after the second run</td></tr>
+<tr><td>Mantle body for an order before vs after the refactor</td><td>Identical</td></tr>
+</table></div>
+
+<h2>Explicitly NOT in this sprint</h2>
+<ul><li>Turning off Mantle usage events (open question Q3).</li><li>New event types (redemption, cashback issued). Same job, later.</li><li>Changelog entry — merchants see nothing, so none (CLAUDE.md gate).</li><li>Mantle tracking event — no merchant UI here.</li></ul>
+
+<h2>Tests — <code>tests/Unit/Jobs/SyncUsageEventToPartnerDexJobTest.php</code>, <code>tests/Unit/Services/UsageOrderEventPayloadTest.php</code></h2>
+<ul>
+<li><code>test_payload_matches_previous_mantle_properties</code> (written first, against the current job)</li>
+<li><code>test_job_not_dispatched_when_unconfigured</code></li>
+<li><code>test_job_posts_bearer_token_and_event_shape</code> (<code>Http::fake()</code>)</li>
+<li><code>test_job_releases_on_5xx_and_stops_on_422</code></li>
+<li><code>test_orders_paid_dispatches_both_mantle_and_partnerdex_jobs</code></li>
+<li><code>test_backfill_dry_run_writes_nothing</code></li>
+<li><code>test_backfill_skips_potentially_closed_shops</code></li>
+<li><code>test_backfill_scoped_to_one_shop</code> (cross-shop isolation)</li>
+</ul>
+
+</main></body></html>

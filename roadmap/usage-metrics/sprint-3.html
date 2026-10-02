@@ -1,0 +1,118 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Usage Metrics — S3 · Metric definitions</title><style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
+--ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
+--brand:#f0a36b;--brand-soft:#33241a;--ok:#6fd3a0;--ok-soft:#173326;--warn:#f2c14e;--warn-soft:#332a12;--info:#8fb5ff;--info-soft:#1a2540;--code:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+nav.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px}
+nav.top a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px;font-size:13px}
+nav.top a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-top:8px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
+ol.build>li{margin:0 0 14px}ol.build b{display:block}
+.note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
+.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
+.mtile .d{font-size:12px;color:var(--ok)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
+.pill.on{border-color:var(--brand);color:var(--brand)}
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Ingest</a><a href="sprint-2.html">S2 · iziGift producer</a><a href="sprint-3.html" class="on">S3 · Metric definitions</a><a href="sprint-4.html">S4 · Customer page</a><a href="sprint-5.html">S5 · Reports (open)</a></nav><main>
+<h1>Sprint 3 — Usage metric definitions</h1>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · migration 5</p>
+
+<h2>Why this ships now</h2>
+<p>Raw events answer "what happened". Henry wants named numbers: Total Revenue, Total Orders, Upsell Revenue, GC Dollars Redeemed. Mantle does this with a definition — name, event, count or sum of a property. Without that layer, every number is still a hand-written query.</p>
+
+<h2>Why this is independently deployable</h2>
+<p>New table and new routes only. The customer page does not read definitions until S4. The settings page has its own preview, so a definition is useful the day it is saved: pick a customer and a window, see the number.</p>
+
+<h2>Build</h2>
+<ol class="build">
+<li><b>Migration 5 — <code>src/db/migrate.ts</code></b>
+<pre>CREATE TABLE IF NOT EXISTS usage_metrics (
+  id               TEXT PRIMARY KEY,          -- crypto.randomUUID()
+  app_id           TEXT NOT NULL,
+  name             TEXT NOT NULL,
+  event_name       TEXT NOT NULL,
+  method           TEXT NOT NULL CHECK (method IN ('count','sum')),
+  property         TEXT,                      -- required when method='sum'
+  filters          TEXT NOT NULL DEFAULT '[]',-- reserved: [{property, op:'eq', value}]
+  show_on_customer INTEGER NOT NULL DEFAULT 1,
+  format           TEXT NOT NULL DEFAULT 'number' CHECK (format IN ('number','usd')),
+  position         INTEGER NOT NULL DEFAULT 0,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL,
+  UNIQUE (app_id, name)
+);</pre>
+<code>format</code> exists because PartnerDex does not know that <code>usdOrderTotal</code> is money; Henry marks it.</li>
+
+<li><b>Aggregator — <code>src/usage/compute.ts</code> (new)</b>
+<code>aggregateMetric(metric, { shopId?: string, from: string, to: string }, db): number</code>.
+<pre>SELECT {method = count ? COUNT(*) : COALESCE(SUM(CAST(json_extract(properties, @path) AS REAL)), 0)}
+  FROM usage_events
+ WHERE app_id = @appId AND event_name = @eventName
+   AND occurred_at &gt;= @from AND occurred_at &lt; @to
+   [AND shop_id = @shopId]</pre>
+<code>@path = '$."' + property + '"'</code> (quoted, so camelCase and dots are safe); <code>property</code> validated against <code>/^[A-Za-z0-9_]{1,64}$/</code> at save. One function — S4 and S5 call it, nothing else re-implements the sum.</li>
+
+<li><b>Windows — <code>src/usage/windows.ts</code> (new)</b>
+<code>resolveUsageWindow(key, now, timezone)</code> for <code>24h, 7d, 30d, 90d, 365d, mtd, all</code> → <code>{from, to}</code> ISO. Month-to-date uses <code>REPORTING_TIMEZONE</code> through the helpers in <code>src/metrics/time.ts</code>, so "this month" means the same thing as on the revenue page. Mantle's "current billing period" is dropped: PartnerDex would need the shop's billing anchor; see S5.</li>
+
+<li><b>Store — <code>src/usage/metrics.ts</code> (new)</b>
+<code>listUsageMetrics(appId?)</code>, <code>createUsageMetric(input)</code>, <code>updateUsageMetric(id, input)</code>, <code>deleteUsageMetric(id)</code>, <code>reorderUsageMetrics(ids)</code>. Validation: <code>sum</code> needs <code>property</code>; <code>count</code> clears it; <code>assertAppInScope</code>; name unique per app → 409.</li>
+
+<li><b>Routes — <code>src/server/usage.ts</code></b> (dashboard router from S1, behind <code>requireAuth</code>)
+<code>GET /metrics</code>, <code>POST /metrics</code>, <code>PUT /metrics/:id</code>, <code>DELETE /metrics/:id</code>, <code>PUT /metrics/order</code>.
+<code>GET /metrics/preview?appId&amp;eventName&amp;method&amp;property&amp;window&amp;shopId</code> → <code>{ value, events: [last 20 matching rows] }</code> — works on an unsaved form, like Mantle's right-hand panel.
+<code>GET /properties?appId&amp;eventName</code> → distinct JSON keys seen in the last 500 events (<code>json_each</code>), for the "Property to sum" picker.</li>
+
+<li><b>Page — <code>web/src/components/UsageMetrics.tsx</code> (new)</b>
+<code>USAGE_METRICS: PageSpec</code> (<code>id: 'usage-metrics'</code>, <code>kind: 'usage-metrics'</code>) as a child of <code>CUSTOMERS</code> beside "Usage events". List view: name, event, calculation ("Sum of property: usdOrderTotal" / "Count"), shown-on-customer toggle. Edit view: name, event name (select from <code>eventNames</code>), radio count/sum, property select (from <code>/properties</code>), format, show on customer page; right panel = preview with window select + customer search. Delete with a confirm.</li>
+
+<li><b>Seed helper — CLI</b>
+<code>partnerdex usage:seed-izigift --app ID</code> creates the 9 metrics in Mantle's list (Total Orders = count; Total Revenue = sum <code>usdOrderTotal</code>; Upsell Revenue = sum <code>usdUpsellRevenue</code>; Gift Card / Store Credit Dollars Redeemed = sum <code>usdGcDollarsRedeemed</code> / <code>usdScDollarsRedeemed</code>; the four "Shop Currency" ones on the <code>original*</code> properties with <code>show_on_customer = 0</code>). Skips names that exist. Saves Henry nine forms.</li>
+</ol>
+
+<h2>Acceptance</h2>
+<div class="tw"><table>
+<tr><th>Scenario</th><th>Expected</th></tr>
+<tr><td>Create "Total Revenue", sum, <code>usdOrderTotal</code>, usd</td><td>Saved; listed as "Sum of property: usdOrderTotal"</td></tr>
+<tr><td>Create a sum metric without a property</td><td>422</td></tr>
+<tr><td>Two metrics named "Total Revenue" on one app</td><td>409</td></tr>
+<tr><td>Preview, 30d, shop with events <code>"13.03"</code> and <code>"47.86"</code></td><td><code>60.89</code></td></tr>
+<tr><td>Preview where some events lack the property</td><td>Those count as 0; no error</td></tr>
+<tr><td>Count metric over 3 events, one outside the window</td><td>2</td></tr>
+<tr><td>Event on 2026-09-30 23:30 New York, window <code>mtd</code> on 2026-10-02, <code>REPORTING_TIMEZONE=America/New_York</code></td><td>Excluded</td></tr>
+<tr><td><code>usage:seed-izigift</code> run twice</td><td>9 metrics, not 18</td></tr>
+</table></div>
+
+<h2>Explicitly NOT in this sprint</h2>
+<ul><li>Showing values on the customer page (S4).</li><li>Filter-by-property UI (column reserved).</li><li>Average / unique-count methods.</li><li>Billing-period window.</li></ul>
+
+<h2>Tests — <code>test/usageMetrics.test.ts</code></h2>
+<ul>
+<li><code>sums string-encoded numeric properties</code></li>
+<li><code>treats missing properties as zero</code></li>
+<li><code>counts events inside the half-open window only</code></li>
+<li><code>scopes the aggregate to one shop</code></li>
+<li><code>resolves mtd in the reporting timezone</code></li>
+<li><code>rejects sum without property and duplicate names</code></li>
+<li><code>rejects a property name with a quote or path characters</code></li>
+<li><code>preview works on an unsaved definition</code></li>
+<li><code>seed is idempotent</code></li>
+<li><code>migration 5 creates usage_metrics</code> (sequence 1–5)</li>
+</ul>
+
+</main></body></html>

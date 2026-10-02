@@ -1,0 +1,108 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Usage Metrics — S4 · Customer page</title><style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
+--ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
+--brand:#f0a36b;--brand-soft:#33241a;--ok:#6fd3a0;--ok-soft:#173326;--warn:#f2c14e;--warn-soft:#332a12;--info:#8fb5ff;--info-soft:#1a2540;--code:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+nav.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px}
+nav.top a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px;font-size:13px}
+nav.top a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-top:8px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
+ol.build>li{margin:0 0 14px}ol.build b{display:block}
+.note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
+.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
+.mtile .d{font-size:12px;color:var(--ok)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
+.pill.on{border-color:var(--brand);color:var(--brand)}
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Ingest</a><a href="sprint-2.html">S2 · iziGift producer</a><a href="sprint-3.html">S3 · Metric definitions</a><a href="sprint-4.html" class="on">S4 · Customer page</a><a href="sprint-5.html">S5 · Reports (open)</a></nav><main>
+<h1>Sprint 4 — Usage on the customer page</h1>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · no migration</p>
+
+<h2>Why this ships now</h2>
+<p>This is the screen Henry liked in Mantle: open a merchant, see their orders and revenue next to what they pay. PartnerDex already shows MRR, plan, lifetime value and contacts on <code>CustomerDetail</code>; usage is the missing half of "is this merchant getting value".</p>
+
+<h2>Why this is independently deployable</h2>
+<p>Read-only over S1 and S3 tables, through a separate request. If the app has no metric with <code>show_on_customer = 1</code>, or the request fails, the card does not render and the page is exactly today's page. <code>getCustomer()</code> and <code>/api/customers/:shopId</code> are not changed.</p>
+
+<h2>Build</h2>
+<ol class="build">
+<li><b>Read model — <code>src/usage/compute.ts</code></b>
+<code>computeCustomerUsage(shopId, { appIds, window, compare = true }): CustomerUsage</code>. For each metric where <code>show_on_customer = 1</code> and <code>app_id</code> in scope (same <code>scope()</code> rule as <code>src/customers/index.ts</code>), call <code>aggregateMetric()</code> from S3 for the window and, when <code>compare</code>, for the window before it. Also return <code>lastEventAt</code> and <code>eventCount</code> for the shop.
+<pre>interface CustomerUsage {
+  window: '24h'|'7d'|'30d'|'90d'|'365d'|'mtd'|'all';
+  from: string; to: string;
+  lastEventAt: string | null;
+  metrics: Array<{ id; appId; appName; name; format: 'number'|'usd';
+                   value: number; previous: number | null }>;
+}</pre></li>
+
+<li><b>Route — <code>src/server/index.ts</code></b>
+<code>GET /api/customers/:shopId/usage?window=30d&amp;appId=</code> next to <code>/api/customers/:shopId</code> (line 275). Separate request so a slow usage query never delays the customer header.</li>
+
+<li><b>Card — <code>web/src/components/CustomerUsage.tsx</code> (new)</b>
+Rendered on the Overview tab of <code>CustomerDetail.tsx</code>, below the header tiles and above <code>AppsTable</code> (line 631). Title "Usage", window pills (7d / 30d / 90d / 365d / MTD / All; default 30d; kept in the URL as <code>?usage=90d</code>), tile grid (reuse the <code>MetricCard</code> styling, not the chart), value formatted with <code>web/src/format.ts</code> currency helper when <code>format = 'usd'</code>, delta vs previous window, "Last event 20 hours ago" under the title, link "Edit metrics" → Usage metrics page. Empty state when the shop has zero events: "No usage events from this store yet."</li>
+
+<li><b>Usage events link</b> — "View events" on the card opens Usage events (S1) pre-filtered to this <code>shopId</code>.</li>
+
+<li><b>API helper</b> — <code>fetchCustomerUsage(shopId, window, appId)</code> in <code>web/src/api.ts</code>, types beside <code>CustomerDetail</code>.</li>
+</ol>
+
+<h2>Acceptance</h2>
+<div class="tw"><table>
+<tr><th>Scenario</th><th>Expected</th></tr>
+<tr><td>Shop with 5 orders in 30 days, Total Revenue metric shown</td><td>Card shows Total Orders 5, Total Revenue = sum, formatted as $</td></tr>
+<tr><td>Switch pill to 90d</td><td>Values recompute; URL has <code>?usage=90d</code>; reload keeps it</td></tr>
+<tr><td>Metric with <code>show_on_customer = 0</code></td><td>Not on the card; still on the settings page</td></tr>
+<tr><td>App filter on the page set to another app</td><td>Only that app's metrics</td></tr>
+<tr><td>No metrics defined</td><td>No card; page is today's page</td></tr>
+<tr><td>Metrics defined, shop has no events</td><td>Card with empty-state line</td></tr>
+<tr><td>Usage endpoint returns 500</td><td>Card hidden; rest of the page loads</td></tr>
+<tr><td>Team Outfitters Sarnia (the Mantle screenshot shop)</td><td>Numbers match a hand SQL sum on the iziGift DB for the same window ±$0.01</td></tr>
+</table></div>
+
+<h2>Explicitly NOT in this sprint</h2>
+<ul><li>Usage column on the Customers list, sorting by usage (S5).</li><li>Charts per metric over time (S5).</li><li>Comparing usage to the plan price (S5).</li></ul>
+
+<h2>Tests — <code>test/customerUsage.test.ts</code></h2>
+<ul>
+<li><code>returns only show_on_customer metrics in app scope</code></li>
+<li><code>computes previous-window values for the delta</code></li>
+<li><code>does not leak another shop's events</code> (two shops, same domain prefix)</li>
+<li><code>returns an empty metrics list when none are defined</code></li>
+<li><code>route rejects an unknown window with 422</code></li>
+<li><code>customer detail response is unchanged</code> (snapshot of <code>/api/customers/:shopId</code> keys)</li>
+</ul>
+
+<h2>Final vision (after S4 + S5)</h2>
+<div class="mock">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <div><b>Usage</b> <span style="color:var(--muted);font-size:13px">· last event 20 hours ago</span></div>
+    <div><span class="pill">7d</span><span class="pill on">30d</span><span class="pill">90d</span><span class="pill">365d</span><span class="pill">MTD</span><span class="pill">All</span></div>
+  </div>
+  <div class="mgrid" style="margin-top:12px">
+    <div class="mtile"><div class="l">Total Orders</div><div class="v">42</div><div class="d">+8 vs prior 30d</div></div>
+    <div class="mtile"><div class="l">Total Revenue</div><div class="v">$3,118.40</div><div class="d">+12%</div></div>
+    <div class="mtile"><div class="l">Upsell Revenue</div><div class="v">$412.06</div><div class="d">+3%</div></div>
+    <div class="mtile"><div class="l">GC Dollars Redeemed</div><div class="v">$860.00</div><div class="d">+21%</div></div>
+    <div class="mtile"><div class="l">Store Credit Redeemed</div><div class="v">$95.50</div><div class="d" style="color:var(--muted)">no change</div></div>
+    <div class="mtile"><div class="l">Revenue per $1 of MRR</div><div class="v">63.6×</div><div class="d" style="color:var(--muted)">S5 · plan $49</div></div>
+  </div>
+  <p style="font-size:13px;color:var(--muted);margin:10px 0 0">View events · Edit metrics</p>
+</div>
+<p style="font-size:13px;color:var(--muted)">Illustrative numbers. The last tile is an S5 idea, not built in S4.</p>
+
+</main></body></html>

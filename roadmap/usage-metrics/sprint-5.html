@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Usage Metrics — S5 · Reports (open)</title><style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
+--ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
+--brand:#f0a36b;--brand-soft:#33241a;--ok:#6fd3a0;--ok-soft:#173326;--warn:#f2c14e;--warn-soft:#332a12;--info:#8fb5ff;--info-soft:#1a2540;--code:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+nav.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px}
+nav.top a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px;font-size:13px}
+nav.top a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-top:8px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
+ol.build>li{margin:0 0 14px}ol.build b{display:block}
+.note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
+.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
+.mtile .d{font-size:12px;color:var(--ok)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
+.pill.on{border-color:var(--brand);color:var(--brand)}
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Ingest</a><a href="sprint-2.html">S2 · iziGift producer</a><a href="sprint-3.html">S3 · Metric definitions</a><a href="sprint-4.html">S4 · Customer page</a><a href="sprint-5.html" class="on">S5 · Reports (open)</a></nav><main>
+<h1>Sprint 5 — Cross-customer usage reports</h1>
+<p class="sub"><span class="chip open">Not designed</span> · repo: partnerdex</p>
+
+<div class="note">This sprint is not locked. It holds open questions, not a Build list. Write the Build list after S4 runs for a few weeks and Henry knows which question he asks most.</div>
+
+<h2>Candidate pieces</h2>
+<ul>
+<li><b>Leaderboard.</b> Top merchants by a chosen metric and window. Reuses <code>aggregateMetric()</code> with <code>GROUP BY shop_id</code>.</li>
+<li><b>Customers list column.</b> One chosen usage metric as a sortable column in <code>listCustomers()</code> (<code>src/customers/index.ts:215</code>).</li>
+<li><b>Metric over time.</b> A <code>usage:&lt;metricId&gt;</code> series through the existing metric registry and <code>metric_cache</code>, so it gets the shared window controls for free.</li>
+<li><b>Value ratio.</b> Usage revenue ÷ MRR per merchant — "they made $3,118 on a $49 plan". Strong for churn-save calls and case studies.</li>
+<li><b>Churn signal.</b> Merchants still paying but with zero orders in 30 days → a Slack topic in <code>src/notifications/topics.ts</code>.</li>
+<li><b>Property filters.</b> The reserved <code>usage_metrics.filters</code> column ("only orders where originalCurrency = GBP").</li>
+</ul>
+
+<h2>Open questions</h2>
+<div class="tw"><table>
+<tr><th>#</th><th>Question</th><th>Why it changes the design</th></tr>
+<tr><td>Q5.1</td><td>Which question does Henry ask most after S4: "who uses it most" or "who is about to churn"?</td><td>Picks leaderboard vs churn signal as the first piece</td></tr>
+<tr><td>Q5.2</td><td>Should usage series go in <code>metric_cache</code>?</td><td>The cache is wiped on rebuild; usage is durable. Fine for a cache, but the invalidation key must include the last <code>usage_events.updated_at</code></td></tr>
+<tr><td>Q5.3</td><td>Do we need Mantle's "current billing period" window?</td><td>Needs a per-shop billing anchor from <code>subscriptions.activated_at</code>; not hard, but not free</td></tr>
+<tr><td>Q5.4</td><td>Ratio metrics as a third <code>method</code>, or a fixed computed tile?</td><td>A new method changes the <code>usage_metrics</code> CHECK and the editor</td></tr>
+</table></div>
+
+</main></body></html>
