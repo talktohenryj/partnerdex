@@ -20,20 +20,22 @@ Branch from this fork's `main` only for work that stays in the fork.
 
 ## Migration numbering
 
-Contacts currently ship as migration 1 in `src/db/migrate.ts`. That is not the
-agreed final numbering. Per issue #2 upstream, the `user_version` runner absorbs
-Aditya's ad-hoc `migrate()` column fixups from `src/db/index.ts` as migrations 1
-and 2, that function is deleted, and contacts move to migration 3.
+Upstream `main` carries the `user_version` runner (upstream PR #4) with
+migrations 1 and 2: the BigQuery fixups and the `install_intervals.started_by`
+column. Contacts are migration 3 in this fork. They are not upstream yet.
 
-Keep every column-existence check when moving those fixups into migration
-bodies. The ad-hoc function is already deployed on upstream `main`, so those
-databases hold the changes while `user_version` is still 0. An unguarded
-migration replays the `ALTER` and fails with `duplicate column name`.
+Each migration number belongs to one migration. If two branches both add "the
+next" number, a database already at that version skips the second one with no
+error. `test/migrate.test.ts` fails when `MIGRATIONS` is not exactly 1, 2, 3, …
+in order. Do not weaken that test to get past a collision. Renumber instead.
 
-Any database already at `user_version = 1` under the old numbering needs
-`PRAGMA user_version = 0` before deploying the renumbered runner. Every
-migration body is idempotent, so the replay is safe. Snapshot the Fly volume
-first.
+Before you add migration 4 or later, check upstream `main` for new migrations.
+Agree the number with Aditya when the contacts pull request is still open.
+
+A database that already ran a migration under a number that later changes
+needs a manual `PRAGMA user_version` fix before the renumbered code deploys.
+Every migration body is idempotent, so a lower version replays safely. Snapshot
+the Fly volume first.
 
 ## Response language — ASD-STE100 Simplified Technical English
 
