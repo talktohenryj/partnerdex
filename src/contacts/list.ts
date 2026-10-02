@@ -41,6 +41,8 @@ export interface ContactShop {
   matchMethod: MatchMethod;
   mrr: number;
   currency: string | null;
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
 }
 
 export interface ContactSummary {
@@ -54,6 +56,7 @@ export interface ContactSummary {
   shops: ContactShop[];
   /** The shop shown in the Customers column: owner first, then highest MRR. */
   primaryShop: ContactShop | null;
+  firstSeenAt: string | null;
   lastSeenAt: string | null;
   createdAt: string | null;
 }
@@ -136,6 +139,7 @@ function whereFor(
   options: {
     search?: string;
     linked?: ContactLinkedFilter;
+    shopId?: string;
     includeUnlinked: boolean;
   },
   appIds: string[],
@@ -166,6 +170,18 @@ function whereFor(
     )`);
     params.q = `%${search}%`;
     params.exact = search;
+  }
+
+  if (options.shopId) {
+    // One store's people, as its customer page lists them. Membership through
+    // any app in scope, so a person linked under two apps shows once.
+    clauses.push(`EXISTS (
+      SELECT 1 FROM contact_shops cs
+       WHERE cs.email = c.email
+         AND cs.shop_id = @shopId
+         AND cs.app_id ${apps.sql}
+    )`);
+    params.shopId = options.shopId;
   }
 
   if (options.linked === 'unlinked') {
@@ -219,6 +235,7 @@ interface ContactRow {
   lastName: string | null;
   isSuppressed: number;
   source: string;
+  firstSeenAt: string | null;
   lastSeenAt: string | null;
   createdAt: string | null;
   primaryMrr: number;
@@ -234,6 +251,8 @@ interface LinkRow {
   shopDomain: string | null;
   mrr: number;
   currency: string | null;
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
 }
 
 function toShop(row: LinkRow): ContactShop {
@@ -246,6 +265,8 @@ function toShop(row: LinkRow): ContactShop {
     matchMethod: row.matchMethod as MatchMethod,
     mrr: row.mrr,
     currency: row.currency,
+    firstSeenAt: row.firstSeenAt,
+    lastSeenAt: row.lastSeenAt,
   };
 }
 
@@ -272,20 +293,23 @@ export function listContacts(
     limit?: number;
     offset?: number;
     appIds?: string[];
+    shopId?: string;
   } = {},
 ): ContactListResult {
   const db = getDb();
   const requested = (options.appIds ?? []).filter(Boolean);
   const scoped = resolveScopedAppIds(db);
   const appIds = requested.length > 0 ? requested.filter((id) => scoped.includes(id)) : scoped;
-  const includeUnlinked = requested.length === 0;
+  const shopId = (options.shopId ?? '').trim() || undefined;
+  // An unlinked person belongs to no store, so a store's list never has one.
+  const includeUnlinked = requested.length === 0 && !shopId;
   const search = (options.search ?? '').trim();
   const linked = options.linked ?? 'all';
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
   const offset = Math.max(options.offset ?? 0, 0);
   const sort = ORDER_BY[options.sort ?? 'name'] ? (options.sort ?? 'name') : 'name';
 
-  const where = whereFor({ search, linked, includeUnlinked }, appIds);
+  const where = whereFor({ search, linked, shopId, includeUnlinked }, appIds);
   const live = asOfPredicate(liveOptions(appIds), '@now');
   const now = new Date().toISOString();
   const apps = appInClause(appIds, 'hyd');
@@ -332,6 +356,7 @@ export function listContacts(
            c.last_name AS lastName,
            c.is_suppressed AS isSuppressed,
            c.source AS source,
+           c.first_seen_at AS firstSeenAt,
            c.last_seen_at AS lastSeenAt,
            c.created_at AS createdAt,
            ${primaryNameSql} AS primaryName,
@@ -368,6 +393,8 @@ export function listContacts(
                 cs.shop_id AS shopId,
                 cs.role AS role,
                 cs.match_method AS matchMethod,
+                cs.first_seen_at AS firstSeenAt,
+                cs.last_seen_at AS lastSeenAt,
                 s.name AS shopName,
                 s.myshopify_domain AS shopDomain,
                 COALESCE(ls.mrr, 0) AS mrr,
@@ -394,7 +421,7 @@ export function listContacts(
     }
   }
 
-  const scopeWhere = whereFor({ includeUnlinked, linked: 'all' }, appIds);
+  const scopeWhere = whereFor({ includeUnlinked, shopId, linked: 'all' }, appIds);
   const totals = db
     .prepare(
       `SELECT
@@ -434,6 +461,7 @@ export function listContacts(
         matchMethod: primaryShop?.matchMethod ?? (shops.length === 0 ? 'none' : null),
         shops,
         primaryShop,
+        firstSeenAt: row.firstSeenAt,
         lastSeenAt: row.lastSeenAt,
         createdAt: row.createdAt,
       };

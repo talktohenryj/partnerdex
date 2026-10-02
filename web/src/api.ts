@@ -314,6 +314,8 @@ export interface ContactShop {
   matchMethod: ContactMatchMethod;
   mrr: number;
   currency: string | null;
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
 }
 
 export interface ContactSummary {
@@ -326,6 +328,7 @@ export interface ContactSummary {
   matchMethod: ContactMatchMethod | null;
   shops: ContactShop[];
   primaryShop: ContactShop | null;
+  firstSeenAt: string | null;
   lastSeenAt: string | null;
   createdAt: string | null;
 }
@@ -357,6 +360,7 @@ export const fetchContacts = (options: {
   limit?: number;
   offset?: number;
   appId?: string;
+  shopId?: string;
 }): Promise<ContactListResult> => {
   const params = new URLSearchParams();
   if (options.search) params.set('q', options.search);
@@ -365,6 +369,7 @@ export const fetchContacts = (options: {
   if (options.limit) params.set('limit', String(options.limit));
   if (options.offset) params.set('offset', String(options.offset));
   if (options.appId) params.set('appIds', options.appId);
+  if (options.shopId) params.set('shopId', options.shopId);
   return getJson<ContactListResult>(`/api/contacts?${params.toString()}`);
 };
 
