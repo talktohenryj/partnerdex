@@ -139,13 +139,63 @@ pre{font-family:var(--mono);font-size:13px;background:var(--code);padding:12px 1
   <h1>Payouts: what landed, and what is coming</h1>
   <p class="lede">A Mantle-style payout view in PartnerDex. It shows the past payouts, the payout that is open now, and the two after it. A small card on the Overview shows the same three numbers.</p>
   <nav class="toc" aria-label="Sections">
-    <a href="#data">1 · Data check</a><a href="#questions">2 · Decisions</a><a href="#plan">3 · Plan</a><a href="#mock-overview">Mockup · Overview</a><a href="#mock-payouts">Mockup · Payouts page</a>
+    <a href="#sprint0">0 · Sprint 0 results</a><a href="#data">1 · Data check</a><a href="#questions">2 · Decisions</a><a href="#plan">3 · Plan</a><a href="#mock-overview">Mockup · Overview</a><a href="#mock-payouts">Mockup · Payouts page</a>
   </nav>
 
   <div class="answer">
     <p><b>Short answer.</b> PartnerDex has almost all of the data. It holds every paid transaction (gross, net, Shopify fee, shop, date) and every live subscription with its price and last charge date. That gives exact past payouts and a good subscription forecast.</p>
     <p>The Partner API has <b>no payout object</b>, so PartnerDex computes the payout calendar itself. The open question is <b>usage that is billed but not yet paid</b>. iziGift does not send it to Mantle, so Mantle reads it from Shopify. Sprint 0 finds out if PartnerDex can read it the same way. If not, PartnerDex estimates it from each store's past usage.</p>
   </div>
+
+  <h2 id="sprint0">0 · Sprint 0 results (4 Oct)</h2>
+  <p>Read-only check. Scratch database synced from 1 Aug 2026 (2 apps, 241 transactions). The unstable historical events query was pulled for 1 Jul – 5 Oct 2026 (1,251 charge and earning events). No change to <code>src/</code>.</p>
+
+  <div class="answer">
+    <p><b>Recommended data source.</b> Two feeds, each for one job. The stable <code>transactions</code> feed stays the source of money: it is what lands. The unstable <code>events</code> query (types <code>CHARGE_*</code> and <code>EARNING_*</code>) supplies the billed-but-not-yet-paid list: a <code>Charge</code> with no matching <code>Earning</code> yet.</p>
+    <p><b>Window rule.</b> A transaction belongs to the payout period that contains its <code>createdAt</code>, in UTC: 1st–15th or 16th–month end. The app charge date does not decide the window. This rule rebuilds the Sep 16–30 payout to the cent.</p>
+  </div>
+
+  <h3>1 · The three Mantle examples</h3>
+  <div class="tw"><table>
+    <tr><th>Store</th><th class="num">Amount</th><th>Mantle date</th><th>App charge (<code>Charge.occurredAt</code>)</th><th>Transaction <code>createdAt</code> = <code>Earning.occurredAt</code></th><th><code>settlementDate</code></th><th>Window</th></tr>
+    <tr><td>New West KnifeWorks</td><td class="num">$108.24</td><td>Sep 19</td><td>Sep 22</td><td>Oct 1, 06:32 UTC</td><td>Oct 16</td><td>Oct 1–15</td></tr>
+    <tr><td>Root Rescue Products</td><td class="num">$3.99</td><td>Sep 28</td><td>Sep 4</td><td>Oct 1, 06:43 UTC</td><td>Oct 16</td><td>Oct 1–15</td></tr>
+    <tr><td>CoolCabanas</td><td class="num">$79.00</td><td>Sep 21</td><td>Sep 3</td><td>Oct 1, 06:32 UTC</td><td>Oct 16</td><td>Oct 1–15</td></tr>
+  </table></div>
+  <ul>
+    <li>The transaction <code>createdAt</code> is <b>not</b> the app billing date. It is the date Shopify records the earning, when the merchant's Shopify bill is paid. All three stores pay on the 1st of each month (Aug 1, Sep 1, Oct 1).</li>
+    <li>The lag from app charge to earning is 0 to 58 days (median 11 days, 309 charges).</li>
+    <li>All 241 transactions since 1 Aug match exactly one <code>Earning</code> on shop, timestamp and gross amount. The <code>chargeId</code> values do not join directly: transactions use the subscription ID, events use the usage-record ID. Match on shop + timestamp + amount.</li>
+    <li>Mantle's dates (Sep 19, 28, 21) do not match any date in the Partner API. Their source is unknown. They do not change the result: Mantle and the <code>createdAt</code> rule both put all three in Oct 1–15.</li>
+  </ul>
+
+  <h3>2 · <code>settlementDate</code> does not show paid vs not paid</h3>
+  <ul>
+    <li>All 367 earnings have a <code>settlementDate</code>. None is null, also for the earnings of Oct 1–4.</li>
+    <li>In 367 of 367, <code>settlementDate</code> is the first day after the payout period of the earning: an Oct 1 earning has Oct 16, a Jul 31 earning has Aug 1. So it is the period close date, set when the earning occurs.</li>
+    <li>An <code>Earning</code> is already money that lands. The billed-but-unpaid amount is a <code>Charge</code> with no <code>Earning</code>. Today there are 58 such charges, $2,160.09 gross. Four of them ($37.00) are more than 30 days old and are possibly never paid.</li>
+    <li>Caution: in the unstable version, <code>Earning.shopifyFee</code> returns a server error (500), and <code>Earning.netAmount</code> equals the gross amount on every row. Do not use event money for the payout. Use <code>transactions.net_amount</code>.</li>
+  </ul>
+
+  <h3>3 · Rebuilt payouts vs Mantle</h3>
+  <div class="tw"><table>
+    <tr><th>Period</th><th class="num">Mantle</th><th class="num">PartnerDex (net, by <code>createdAt</code>)</th><th>Result</th></tr>
+    <tr><td>Sep 16–30 (pays Oct 7)</td><td class="num">$1,970.95</td><td class="num">$1,970.95<br><span class="rec">49 transactions · gross $2,044.44 · gross − net $73.49</span></td><td><span class="chip c-ok">Exact match</span></td></tr>
+    <tr><td>Oct 1–15 (pays Oct 22)</td><td class="num">$1,647.49</td><td class="num">$1,106.54 landed (Oct 1–4)<br><span class="rec">+ about $1,120 net of unpaid charges that the shops' bill days put before Oct 16 → about $2,225</span></td><td><span class="chip c-part">Open period</span></td></tr>
+  </table></div>
+  <ul>
+    <li>Sep 16–30 includes both apps (iziGift $1,883.56, Right Price $87.39). So Mantle counts both apps too.</li>
+    <li>Oct 1–15 is not closed. Mantle's figure is between what landed and what the unpaid charges could add. The split of Mantle's $1,647.49 could not be rebuilt from the data. Do the exact check again on Oct 16, when the period is closed.</li>
+    <li>Forecast backtest (landed by day 4 + unpaid charges placed on each shop's usual bill day): 10–23% under the actual result for the four periods Aug 1 – Sep 30. The gap is charges created after day 4 that also land in the period. Sprint 1 adds a per-store usage estimate for that gap.</li>
+  </ul>
+
+  <h3>Effect on sprint 1</h3>
+  <ul>
+    <li><code>history.ts</code>: sum <code>transactions</code> by <code>createdAt</code> period. No change from the plan.</li>
+    <li><code>forecast.ts</code>: "Billed" becomes <b>exact</b> for the charge list (from <code>events</code>). The date it lands is still an estimate: the shop's usual bill day. Then add the per-store estimate for charges not created yet.</li>
+    <li>The events query is on the <code>unstable</code> API version. Pin it to its own version setting, separate from <code>PARTNER_API_VERSION</code>. Fall back to the estimate when the query fails. The date filter defaults to a 30-day window, so sync in 30-day steps.</li>
+    <li>This needs new sync code and a table for charges (a schema change). The plan said no schema change, so this choice goes to Henry before sprint 1.</li>
+  </ul>
 
   <h2 id="data">1 · Data check</h2>
   <p>What each part of the Mantle screen needs, and where PartnerDex stands.</p>
