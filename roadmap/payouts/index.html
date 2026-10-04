@@ -1,0 +1,389 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PartnerDex Payouts Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a plan document (single 860px column) with two full-width app mockups drawn in PartnerDex's own Lumina Modern tokens. */
+:root{
+  --page:#f8fafc;--surface-1:#ffffff;--surface-2:#f1f5f9;
+  --text-primary:#0f172a;--text-secondary:#475569;--muted:#64748b;--border:#cbd5e1;
+  --brand:#2e72d2;--brand-accent:#2e72d2;--brand-soft:#e8f0fb;
+  --series-2:#7c5ce0;--series-3:#0e9aa7;--series-4:#b87309;
+  --grid:#e2e8f0;--good:#16a34a;--good-soft:#e7f6ec;--warn:#8a5a00;--warn-soft:#fff4d6;--critical:#dc2626;
+  --code:#eef2f7;--shadow:0 1px 3px rgba(15,23,42,.08),0 4px 12px rgba(15,23,42,.05);
+  --font:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --page:#0d0d0d;--surface-1:#1a1a19;--surface-2:#262624;
+  --text-primary:#e2e2e6;--text-secondary:#c4c6d0;--muted:#a8abb5;--border:#44474e;
+  --brand:#2e72d2;--brand-accent:#6ba3e8;--brand-soft:#1b2a40;
+  --series-2:#a48bec;--series-3:#2fbecc;--series-4:#e8912a;
+  --grid:#3a3d43;--good:#4ade80;--good-soft:#16301f;--warn:#f2c14e;--warn-soft:#332a12;--critical:#fca5a5;
+  --code:#262624;--shadow:none;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --page:#0d0d0d;--surface-1:#1a1a19;--surface-2:#262624;
+  --text-primary:#e2e2e6;--text-secondary:#c4c6d0;--muted:#a8abb5;--border:#44474e;
+  --brand:#2e72d2;--brand-accent:#6ba3e8;--brand-soft:#1b2a40;
+  --series-2:#a48bec;--series-3:#2fbecc;--series-4:#e8912a;
+  --grid:#3a3d43;--good:#4ade80;--good-soft:#16301f;--warn:#f2c14e;--warn-soft:#332a12;--critical:#fca5a5;
+  --code:#262624;--shadow:none;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text-primary);font:15px/1.6 var(--font);padding-inline:16px}
+.doc{max-width:860px;margin:0 auto;padding-block:32px 72px}
+.wide{max-width:1180px;margin:0 auto}
+h1{font-size:30px;line-height:1.2;margin:0 0 6px;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:20px;margin:44px 0 10px;text-wrap:balance}
+h3{font-size:16px;margin:24px 0 6px}
+p{margin:0 0 12px}
+.lede{color:var(--text-secondary);font-size:16px;max-width:65ch}
+.eyebrow{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 6px}
+code{font-family:var(--mono);font-size:13px;background:var(--code);padding:1px 5px;border-radius:4px}
+a{color:var(--brand-accent)}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 0}
+.toc a{font-size:13px;text-decoration:none;border:1px solid var(--border);border-radius:999px;padding:4px 11px;color:var(--text-secondary)}
+.toc a:hover,.toc a:focus-visible{border-color:var(--brand-accent);color:var(--brand-accent);outline:none}
+.answer{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:20px 0}
+.answer p:last-child{margin:0}
+.tw{overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin:12px 0;background:var(--surface-1)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--grid);vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.c-ok{background:var(--good-soft);color:var(--good)}
+.c-part{background:var(--warn-soft);color:var(--warn)}
+.c-no{background:var(--surface-2);color:var(--critical)}
+.c-brand{background:var(--brand-soft);color:var(--brand-accent)}
+ol.q{padding-left:22px}ol.q>li{margin:0 0 16px}ol.q b{display:block}
+.rec{color:var(--text-secondary);font-size:14px}
+.sprints{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:14px 0}
+.sprint{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:16px 18px;min-width:0}
+.sprint h3{margin:4px 0 8px}
+.sprint ul{padding-left:18px;margin:0}.sprint li{margin:0 0 6px;font-size:14px}
+pre{font-family:var(--mono);font-size:13px;background:var(--code);padding:12px 14px;border-radius:8px;overflow-x:auto;margin:10px 0}
+
+/* ---------- app mockups ---------- */
+.mock-label{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin:56px 0 10px}
+.mock-label h2{margin:0}
+.mock-label span{font-size:13px;color:var(--muted)}
+.app{display:grid;grid-template-columns:200px minmax(0,1fr);border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--page);box-shadow:var(--shadow)}
+.rail{background:var(--surface-2);padding:16px 10px;border-right:1px solid var(--border);font-size:13px}
+.rail .logo{font-weight:700;font-size:15px;padding:0 8px 14px}
+.rail .grp{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:12px 8px 4px;font-weight:600}
+.rail a{display:block;padding:6px 8px;border-radius:6px;color:var(--text-secondary);text-decoration:none}
+.rail a.on{background:var(--surface-1);color:var(--text-primary);font-weight:600;box-shadow:var(--shadow)}
+.rail a .new{font-size:10px;font-weight:700;color:var(--brand-accent);margin-left:6px;letter-spacing:.04em}
+.main{padding:20px 22px 26px;min-width:0}
+.mast{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.mast h3{margin:0;font-size:20px}.mast p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap}
+.btn{font:inherit;font-size:13px;border:1px solid var(--border);background:var(--surface-1);color:var(--text-primary);border-radius:7px;padding:6px 11px;cursor:pointer}
+.btn:hover,.btn:focus-visible{border-color:var(--brand-accent);outline:none}
+.btn[disabled]{opacity:.45;cursor:default}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.card{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);min-width:0}
+.card .l{font-size:13px;font-weight:600}.card .s{font-size:12px;color:var(--muted)}
+.card .v{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;margin:6px 0 2px}
+.card .d{font-size:12px;color:var(--good)}
+.card.ghost{opacity:.55}
+.card.focus{outline:2px solid var(--brand-accent);outline-offset:2px}
+.spark{display:block;width:100%;height:44px;margin-top:8px}
+.prow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:9px 0;border-top:1px solid var(--grid);font-size:13px}
+.prow:first-of-type{border-top:0}
+.prow .amt{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.prow .when{color:var(--muted);font-size:12px}
+.prow .rng{color:var(--muted);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.mini{display:flex;align-items:flex-end;gap:5px;height:58px;margin:10px 0 4px}
+.mini i{flex:1;border-radius:3px 3px 0 0;background:var(--brand-accent);display:block}
+.mini i.est{background:repeating-linear-gradient(135deg,var(--brand-accent) 0 3px,transparent 3px 6px);border:1px solid var(--brand-accent);border-bottom:0}
+.mini i.now{background:linear-gradient(to top,var(--brand-accent) var(--f),transparent var(--f)),repeating-linear-gradient(135deg,var(--brand-accent) 0 3px,transparent 3px 6px);border:1px solid var(--brand-accent);border-bottom:0}
+.minilab{display:flex;gap:5px;font-size:10px;color:var(--muted)}.minilab span{flex:1;text-align:center}
+.link{font-size:12px;color:var(--brand-accent);text-decoration:none;font-weight:600}
+
+.pnav{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px;flex-wrap:wrap}
+.pnav .t{text-align:center;flex:1;min-width:180px}
+.pnav .t b{display:block;font-size:15px}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.tile{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:12px 14px;min-width:0}
+.tile .l{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.tile .v{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:4px}
+.tile .x{font-size:12px;color:var(--muted)}
+.tile.total{border-color:var(--brand-accent)}
+.sw{width:10px;height:10px;border-radius:2px;display:inline-block;flex:none}
+.sw.landed{background:var(--brand-accent)}
+.sw.subs{background:var(--series-4)}
+.sw.usage{background:repeating-linear-gradient(135deg,var(--series-2) 0 2px,transparent 2px 4px);border:1px solid var(--series-2)}
+.chartcard{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.chartcard .hd{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.chartcard .hd b{font-size:15px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary);margin-top:6px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+#daychart{display:block;width:100%;height:auto}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.tabs .btn.on{background:var(--brand-soft);border-color:var(--brand-accent);color:var(--brand-accent);font-weight:600}
+.state{font-size:12px;font-weight:600}
+.callouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:14px 0 0}
+.callouts div{font-size:13px;color:var(--text-secondary);border-left:2px solid var(--brand-accent);padding:2px 0 2px 10px}
+.callouts b{color:var(--text-primary)}
+@media (max-width:820px){
+  .app{grid-template-columns:1fr}.rail{display:none}
+  .cards{grid-template-columns:1fr}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+</style>
+
+<div class="doc">
+  <p class="eyebrow">PartnerDex · plan · 4 October 2026</p>
+  <h1>Payouts: what landed, and what is coming</h1>
+  <p class="lede">A Mantle-style payout view in PartnerDex. It shows the past payouts, the payout that is open now, and the two after it. A small card on the Overview shows the same three numbers.</p>
+  <nav class="toc" aria-label="Sections">
+    <a href="#data">1 · Data check</a><a href="#questions">2 · Questions</a><a href="#plan">3 · Plan</a><a href="#mock-overview">Mockup · Overview</a><a href="#mock-payouts">Mockup · Payouts page</a>
+  </nav>
+
+  <div class="answer">
+    <p><b>Short answer.</b> PartnerDex has almost all of the data. It holds every paid transaction (gross, net, Shopify fee, shop, date) and every live subscription with its price and last charge date. That gives exact past payouts and a good subscription forecast.</p>
+    <p>Two pieces are missing. The Partner API has <b>no payout object</b>, so PartnerDex must compute the payout calendar itself. PartnerDex also cannot see <b>usage that is billed but not yet paid</b>. Mantle sees that usage because iziGift reports it to Mantle. PartnerDex must estimate it from each store's past usage. This is about two sprints, so one small roadmap with two pages is enough.</p>
+  </div>
+
+  <h2 id="data">1 · Data check</h2>
+  <p>What each part of the Mantle screen needs, and where PartnerDex stands.</p>
+  <div class="tw"><table>
+    <tr><th>Mantle shows</th><th>PartnerDex source</th><th>Status</th></tr>
+    <tr><td><b>Past payouts</b> (Sep 16–30 → Oct 7)</td><td><code>transactions</code>: all five app sale types, with <code>created_at</code>, <code>gross_amount</code>, <code>net_amount</code>, <code>shopify_fee</code>, per shop. Sum by payout period.</td><td><span class="chip c-ok">Have</span></td></tr>
+    <tr><td><b>Paid</b> in the open period</td><td>The same table, for the transactions that already arrived in this period.</td><td><span class="chip c-ok">Have</span></td></tr>
+    <tr><td><b>Upcoming</b> subscription charges</td><td><code>subscriptions</code>: <code>amount</code>, <code>billing_interval</code>, <code>last_sale_at</code>, <code>churn_at</code>, <code>frozen_at</code>. Next charge = last charge + 30 days (or + 1 year). <code>app_events.billing_on</code> gives a second check.</td><td><span class="chip c-ok">Have</span></td></tr>
+    <tr><td><b>Billed subscriptions</b> (on the merchant's bill, not paid yet)</td><td>Not in the Partner API. The forecast puts these into "Subscriptions due".</td><td><span class="chip c-part">Estimate</span></td></tr>
+    <tr><td><b>Billed usage</b> ($1,532.95 of the $1,647.49 Oct 22 payout)</td><td>Not in the Partner API. Mantle gets it from iziGift's own usage records. PartnerDex has each store's past <code>AppUsageSale</code> amounts and dates, so it can estimate the next charge per store.</td><td><span class="chip c-part">Estimate</span></td></tr>
+    <tr><td><b>Payout date</b> and period rule</td><td>No payout object in the stable Partner API. The unstable API has an <code>Earning</code> object with a <code>settlementDate</code>, but no payout id or status. PartnerDex computes the period from a rule, and Henry confirms the rule once against the Partner Dashboard.</td><td><span class="chip c-no">Missing</span></td></tr>
+    <tr><td>Tax and payout fees</td><td>Shopify rolls tax into one <code>TAX</code> transaction per payout. Sync skips non-app transactions today. Small amounts; see question 4.</td><td><span class="chip c-no">Missing</span></td></tr>
+  </table></div>
+  <p class="rec">Already built that helps: the trailing 30-day usage figure inside MRR (<code>usageSeries</code> in <code>src/metrics/asof.ts</code>), and a window resolver that already accepts future dates (<code>allowFutureDates</code> in <code>src/metrics/time.ts</code>, with no caller yet). PartnerDex has no forecast code today.</p>
+  <p class="rec">One useful fact from the screenshot: Mantle's Oct 16–31 figure ($522.86) is low because Mantle does not forecast usage at all. It shows only usage that iziGift already billed. PartnerDex can do better on the periods after the open one.</p>
+
+  <h2 id="questions">2 · Questions for you</h2>
+  <p>Each question has my recommendation. A short "yes" to all of them is enough to start.</p>
+  <ol class="q">
+    <li><b>Which period rule does Shopify use for you?</b>Mantle shows 1st–15th paid on the 22nd, and 16th–month end paid on about the 7th. The Shopify help page describes a different split (1st–10th, 11th to 5 days before month end, last 5 days). <span class="rec">Recommendation: send me two past payouts from Partner Dashboard → Payouts (date, amount), or the payouts CSV. Sprint 1 builds the rule and proves it against them.</span></li>
+    <li><b>Show net or gross as the headline?</b><span class="rec">Recommendation: net. Net is the money that reaches your bank. Gross and the Shopify fee show in the period detail.</span></li>
+    <li><b>Is a per-store usage estimate good enough?</b>For each store, the estimate takes the average of its last three usage charges and puts it on the store's next bill date. It shows a low–high range, not one exact number. <span class="rec">Recommendation: yes for now. Later, iziGift can send its usage records to PartnerDex (the same producer as Usage Metrics sprint 2). Then "Billed usage" becomes exact, like Mantle.</span></li>
+    <li><b>Include tax transactions?</b><span class="rec">Recommendation: no for sprint 1. Sync them in sprint 2 only if the totals do not match the Partner Dashboard within about 1%.</span></li>
+    <li><b>Fork only, or upstream to Aditya?</b>Nothing here is iziGift-specific. <span class="rec">Recommendation: build it upstream-ready. Branch from <code>upstream/main</code>, as the fork rules say. It needs no migration, so there is no number conflict.</span></li>
+  </ol>
+
+  <h2 id="plan">3 · Plan</h2>
+  <p>Two sprints. Sprint 1 is the engine and its proof. Sprint 2 is the two screens. No schema change: everything reads tables that exist today.</p>
+  <div class="sprints">
+    <div class="sprint">
+      <span class="chip c-brand">Sprint 1 · engine</span>
+      <h3>Payout calendar, history, forecast</h3>
+      <ul>
+        <li><code>src/payouts/calendar.ts</code>: period rule → period start, end, payout date. Business-day aware.</li>
+        <li><code>src/payouts/history.ts</code>: sum net, gross and fee per period, split into subscription, usage, one-time and adjustments.</li>
+        <li><code>src/payouts/forecast.ts</code>: subscriptions due (live, not frozen, next charge in the period, not charged yet) + usage estimate per store with a low–high range.</li>
+        <li>Backtest: run the forecast "as of" day 4 of each past period and compare with what landed. This gives a real accuracy number, and PartnerDex can do it because it rebuilds any past date.</li>
+        <li><code>GET /api/payouts?period=2026-10-a</code> and a <code>partnerdex payouts</code> CLI command.</li>
+        <li>Tests: calendar edges (month end, weekends, February), forecast with churn and frozen stores, backtest.</li>
+      </ul>
+    </div>
+    <div class="sprint">
+      <span class="chip c-brand">Sprint 2 · screens</span>
+      <h3>Payouts page and Overview card</h3>
+      <ul>
+        <li>New <b>Payouts</b> page under Reports: period stepper (Previous / Next, up to two periods ahead), four tiles, a daily chart, and a per-store table.</li>
+        <li>Each line shows its state: <b>Landed</b>, <b>Due</b>, or <b>Estimated</b>. Estimates always show the range.</li>
+        <li>New <b>Payouts</b> card on the Overview. It is the sixth card, so the grid becomes two full rows of three.</li>
+        <li>Optional Slack note when a payout period closes, with landed vs. forecast.</li>
+        <li>Then decide on question 3's iziGift usage feed, if the backtest shows usage error above about 15%.</li>
+      </ul>
+    </div>
+  </div>
+  <pre>Sprint 1  calendar ──► history ──► forecast ──► backtest ──► API + CLI
+Sprint 2                                  API ──► Payouts page
+                                          API ──► Overview card</pre>
+</div>
+
+<!-- ======================= MOCKUP A: OVERVIEW ======================= -->
+<div class="wide">
+  <div class="mock-label" id="mock-overview"><h2>Mockup · Overview card</h2><span>Example figures, for scale only. Today = 4 Oct 2026.</span></div>
+  <div class="app">
+    <aside class="rail" aria-label="Mock navigation">
+      <div class="logo">PartnerDex</div>
+      <a class="on" href="#mock-overview">Overview</a><a href="#mock-overview">Customers</a>
+      <div class="grp">Reports</div>
+      <a href="#mock-overview">Revenue</a><a href="#mock-payouts">Payouts<span class="new">NEW</span></a><a href="#mock-overview">Subscriptions</a><a href="#mock-overview">Churn</a><a href="#mock-overview">Funnel</a><a href="#mock-overview">Reviews</a>
+      <div class="grp">Settings</div>
+      <a href="#mock-overview">App listings</a><a href="#mock-overview">Notifications</a>
+    </aside>
+    <div class="main">
+      <div class="mast"><div><h3>Overview</h3><p>The five figures that say whether the business is working.</p></div>
+        <div class="ctrl"><button class="btn" type="button">All apps</button><button class="btn" type="button">Last 12 months</button></div></div>
+      <div class="cards">
+        <div class="card ghost"><div class="l">MRR</div><div class="s">Recurring revenue live at each point.</div><div class="v">$4,512</div><div class="d">+12.8% vs. last year</div><svg class="spark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--brand-accent)" stroke-width="2" points="0,36 20,35 40,33 60,30 80,31 100,26 120,24 140,22 160,18 180,14 200,10"/></svg></div>
+        <div class="card ghost"><div class="l">Gross earnings</div><div class="s">Billed in the period, before revenue share.</div><div class="v">$3,941</div><div class="d">+9.1%</div><svg class="spark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><g fill="var(--brand-accent)"><rect x="2" y="22" width="12" height="22"/><rect x="19" y="20" width="12" height="24"/><rect x="36" y="24" width="12" height="20"/><rect x="53" y="18" width="12" height="26"/><rect x="70" y="16" width="12" height="28"/><rect x="87" y="19" width="12" height="25"/><rect x="104" y="14" width="12" height="30"/><rect x="121" y="12" width="12" height="32"/><rect x="138" y="15" width="12" height="29"/><rect x="155" y="10" width="12" height="34"/><rect x="172" y="8" width="12" height="36"/><rect x="189" y="11" width="10" height="33"/></g></svg></div>
+        <div class="card ghost"><div class="l">Revenue churn</div><div class="s">MRR lost against the MRR at the window start.</div><div class="v">3.4%</div><div class="d">−0.6 pts</div><svg class="spark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--critical)" stroke-width="2" points="0,20 20,24 40,18 60,26 80,22 100,28 120,25 140,30 160,27 180,31 200,30"/></svg></div>
+        <div class="card ghost"><div class="l">Subscribers</div><div class="s">Shop-and-app pairs currently paying.</div><div class="v">158</div><div class="d">+21</div><svg class="spark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--brand-accent)" stroke-width="2" points="0,34 20,33 40,31 60,31 80,28 100,27 120,25 140,22 160,21 180,19 200,17"/></svg></div>
+        <div class="card ghost"><div class="l">On trial</div><div class="s">Inside the free period at each point.</div><div class="v">2</div><div class="d">−3</div><svg class="spark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--brand-accent)" stroke-width="2" points="0,20 20,16 40,22 60,18 80,26 100,24 120,30 140,28 160,32 180,34 200,36"/></svg></div>
+        <div class="card focus">
+          <div class="l">Payouts</div><div class="s">Net. What lands in the bank, and when.</div>
+          <div class="mini" aria-label="The last three payouts, the open one, and the next one">
+            <i style="height:80%"></i><i style="height:84%"></i><i style="height:90%"></i><i class="now" style="height:82%;--f:66%"></i><i class="est" style="height:92%"></i>
+          </div>
+          <div class="minilab"><span>Aug 16–31</span><span>Sep 1–15</span><span>Sep 16–30</span><span>Oct 1–15</span><span>Oct 16–31</span></div>
+          <div class="prow"><div>Sep 16 – Sep 30<div class="when">Closed · pays Oct 7</div></div><div><div class="amt">$1,970.95</div><div class="rng">exact</div></div></div>
+          <div class="prow"><div>Oct 1 – Oct 15<div class="when">Open · pays Oct 22</div></div><div><div class="amt">~$1,806</div><div class="rng">$1,696–$1,956</div></div></div>
+          <div class="prow"><div>Oct 16 – Oct 31<div class="when">Forecast · pays Nov 6</div></div><div><div class="amt">~$2,020</div><div class="rng">$1,490–$2,160</div></div></div>
+          <a class="link" href="#mock-payouts">View payouts →</a>
+        </div>
+      </div>
+      <div class="callouts">
+        <div><b>Same card shape as the other five.</b> The sixth card fills the second row, so the Overview keeps its 3 × 2 grid.</div>
+        <div><b>Bars:</b> solid = landed, striped = estimated. The open period is part solid, part striped.</div>
+        <div><b>"~" and a range</b> mark every number that has an estimate in it. A closed period shows "exact".</div>
+      </div>
+    </div>
+  </div>
+
+<!-- ======================= MOCKUP B: PAYOUTS PAGE ======================= -->
+  <div class="mock-label" id="mock-payouts"><h2>Mockup · Payouts page</h2><span>Use Previous and Next. Example figures.</span></div>
+  <div class="app">
+    <aside class="rail" aria-label="Mock navigation">
+      <div class="logo">PartnerDex</div>
+      <a href="#mock-overview">Overview</a><a href="#mock-payouts">Customers</a>
+      <div class="grp">Reports</div>
+      <a href="#mock-payouts">Revenue</a><a class="on" href="#mock-payouts">Payouts<span class="new">NEW</span></a><a href="#mock-payouts">Subscriptions</a><a href="#mock-payouts">Churn</a><a href="#mock-payouts">Funnel</a><a href="#mock-payouts">Reviews</a>
+      <div class="grp">Settings</div>
+      <a href="#mock-payouts">App listings</a><a href="#mock-payouts">Notifications</a>
+    </aside>
+    <div class="main">
+      <div class="mast"><div><h3>Payouts</h3><p>What Shopify paid you, what is open now, and the next two payouts.</p></div>
+        <div class="ctrl"><button class="btn" type="button">All apps</button><button class="btn" type="button">Net</button><button class="btn" type="button">Export CSV</button></div></div>
+
+      <div class="pnav">
+        <button class="btn" type="button" id="prev">‹ Previous period</button>
+        <div class="t"><b id="ptitle">October 1 – 15, 2026</b><span id="pstate" class="state"></span></div>
+        <button class="btn" type="button" id="next">Next period ›</button>
+      </div>
+
+      <div class="tiles">
+        <div class="tile"><div class="l"><i class="sw landed"></i>Landed</div><div class="v" id="t-landed"></div><div class="x" id="t-landed-x"></div></div>
+        <div class="tile"><div class="l"><i class="sw subs"></i>Subscriptions due</div><div class="v" id="t-subs"></div><div class="x" id="t-subs-x"></div></div>
+        <div class="tile"><div class="l"><i class="sw usage"></i>Usage, estimated</div><div class="v" id="t-usage"></div><div class="x" id="t-usage-x"></div></div>
+        <div class="tile total"><div class="l" id="t-total-l">Expected payout</div><div class="v" id="t-total"></div><div class="x" id="t-total-x"></div></div>
+      </div>
+
+      <div class="chartcard">
+        <div class="hd"><b id="c-title"></b><span class="rec" id="c-note"></span></div>
+        <svg id="daychart" viewBox="0 0 760 240" role="img" aria-label="Daily amounts in the selected payout period"></svg>
+        <div class="legend"><span><i class="sw landed"></i>Landed</span><span><i class="sw subs"></i>Subscription due</span><span><i class="sw usage"></i>Usage, estimated</span></div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Filter lines">
+        <button class="btn on" type="button" data-f="all">All lines</button><button class="btn" type="button" data-f="Landed">Landed</button><button class="btn" type="button" data-f="Due">Due</button><button class="btn" type="button" data-f="Estimated">Estimated</button>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Store</th><th>Kind</th><th>State</th><th>Date</th><th class="num">Amount (net)</th><th>Why</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+      <div class="callouts">
+        <div><b>Landed</b> is a real Partner API transaction. It never changes.</div>
+        <div><b>Due</b> is a live subscription whose next charge falls in this period. It drops out if the store cancels or freezes.</div>
+        <div><b>Estimated</b> is a store's usage, from the average of its last three usage charges, placed on its next bill date.</div>
+      </div>
+    </div>
+  </div>
+  <p class="rec" style="margin:14px 0 72px">The forecast periods stop two ahead of today. Past that, most of the number is a guess. Store names in the table are example stores from the Mantle screenshot.</p>
+</div>
+
+<script>
+(function(){
+  var money=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  var round=function(v){return '$'+Math.round(v).toLocaleString('en-US');};
+  // Example data. Days are day-of-period. l = landed, s = subscription due, u = usage estimate.
+  var P=[
+    {t:'August 16 – 31, 2026',st:'Paid Sep 8',kind:'paid',days:16,landed:1760.40,
+     d:{1:[210],2:[160],3:[90],4:[130],5:[70],6:[40],7:[180],8:[60],9:[95],10:[85],11:[120],12:[55],13:[140],14:[90],15:[115],16:[120.40]}},
+    {t:'September 1 – 15, 2026',st:'Paid Sep 22',kind:'paid',days:15,landed:1842.10,
+     d:{1:[340],2:[590],3:[60],4:[48],5:[110],6:[35],7:[190],8:[70],9:[52],10:[60],11:[38],12:[22],13:[90],14:[70],15:[67.10]}},
+    {t:'September 16 – 30, 2026',st:'Closed · pays Oct 7',kind:'closed',days:15,landed:1970.95,
+     d:{1:[160],2:[220],3:[95],4:[310],5:[70],6:[120],7:[85],8:[260],9:[110],10:[60],11:[140],12:[75],13:[90],14:[105],15:[70.95]}},
+    {t:'October 1 – 15, 2026',st:'Open · pays Oct 22 · today is day 4',kind:'open',days:15,today:4,
+     d:{1:[380],2:[690],3:[70],4:[44.20],5:[0,60,35],6:[0,0,30],7:[0,49,111],8:[0,0,60],9:[0,29,11],10:[0,0,55],11:[0,25,0],12:[0,0,20],13:[0,0,30],14:[0,49,0],15:[0,0,58]},
+     uRange:[300,560]},
+    {t:'October 16 – 31, 2026',st:'Forecast · pays Nov 6',kind:'fc',days:16,
+     d:{1:[0,79,140],2:[0,0,95],3:[0,49,60],4:[0,0,180],5:[0,108,40],6:[0,0,75],7:[0,49,120],8:[0,0,65],9:[0,79,85],10:[0,0,110],11:[0,49,70],12:[0,0,90],13:[0,79,55],14:[0,0,100],15:[0,48,95],16:[0,0,100]},
+     uRange:[950,1620]}
+  ];
+  var ROWS={
+    open:[
+      ['New West KnifeWorks','Usage','Landed','Oct 2',108.24,'Partner API transaction'],
+      ['AVC photo video store','Usage','Landed','Oct 1',79.00,'Partner API transaction'],
+      ['CoolCabanas','Usage','Landed','Oct 1',79.00,'Partner API transaction'],
+      ['ELY WINE','Subscription','Due','Oct 7',49.00,'Last charge Sep 7, monthly'],
+      ['EAT Skincare','Subscription','Due','Oct 14',49.00,'Last charge Sep 14, monthly'],
+      ['Peachy Sunday','Usage','Estimated','Oct 7',72.00,'Avg of last 3: $61, $72, $83'],
+      ['Incandescence Medical','Usage','Estimated','Oct 5',9.00,'Avg of last 3: $9, $9, $9'],
+      ['Root Rescue Products','Usage','Estimated','Oct 15',3.99,'Avg of last 3: $3.99 ×3']
+    ],
+    fc:[
+      ['MAIMÈRE','Subscription','Due','Oct 16',79.00,'Last charge Sep 16, monthly'],
+      ['BETWEEN THE VINES','Usage','Estimated','Oct 24',140.00,'Avg of last 3: $96, $140, $184'],
+      ['CoolCabanas','Usage','Estimated','Oct 31',79.00,'Avg of last 3: $79 ×3'],
+      ['New West KnifeWorks','Subscription','Due','Oct 20',108.00,'Last charge Sep 20, monthly']
+    ],
+    past:[
+      ['New West KnifeWorks','Usage','Landed','day 4',108.24,'Partner API transaction'],
+      ['AVC photo video store','Usage','Landed','day 2',79.00,'Partner API transaction'],
+      ['ELY WINE','Subscription','Landed','day 7',49.00,'Partner API transaction'],
+      ['Refund · Duck Dogz Chews','Adjustment','Landed','day 9',-19.00,'APP_SALE_ADJUSTMENT']
+    ]
+  };
+  var idx=3,filter='all';
+  var $=function(id){return document.getElementById(id);};
+  function sums(p){var l=0,s=0,u=0;for(var k in p.d){var a=p.d[k];l+=a[0]||0;s+=a[1]||0;u+=a[2]||0;}return {l:l,s:s,u:u};}
+  function draw(p){
+    var svg=$('daychart'),W=760,H=240,L=46,R=10,T=12,B=28,iw=W-L-R,ih=H-T-B,max=800,n=p.days,bw=iw/n;
+    var y=function(v){return T+ih-(v/max)*ih;};
+    var o='<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="none"/><rect width="3" height="6" fill="var(--series-2)"/></pattern></defs>';
+    [0,200,400,600,800].forEach(function(t){o+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(t)+'" y2="'+y(t)+'" stroke="var(--grid)" stroke-width="1"/><text x="'+(L-8)+'" y="'+(y(t)+4)+'" text-anchor="end" font-size="11" fill="var(--muted)">$'+t+'</text>';});
+    for(var i=1;i<=n;i++){
+      var a=p.d[i]||[0,0,0],x=L+(i-1)*bw+bw*0.18,w=bw*0.64,base=0;
+      [[a[0]||0,'var(--brand-accent)',''],[a[1]||0,'var(--series-4)',''],[a[2]||0,'url(#hatch)','var(--series-2)']].forEach(function(seg){
+        if(seg[0]<=0)return;var top=y(base+seg[0]),h=y(base)-top;
+        o+='<rect x="'+x.toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+h.toFixed(1)+'" fill="'+seg[1]+'"'+(seg[2]?' stroke="'+seg[2]+'" stroke-width="1"':'')+'/>';base+=seg[0];});
+      if(n<=16)o+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(H-10)+'" text-anchor="middle" font-size="11" fill="var(--muted)">'+i+'</text>';
+    }
+    if(p.today){var tx=L+p.today*bw;o+='<line x1="'+tx+'" x2="'+tx+'" y1="'+T+'" y2="'+(T+ih)+'" stroke="var(--text-secondary)" stroke-dasharray="4 4"/><text x="'+(tx+5)+'" y="'+(T+11)+'" font-size="11" fill="var(--text-secondary)">today</text>';}
+    o+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+(T+ih)+'" y2="'+(T+ih)+'" stroke="var(--border)"/>';
+    svg.innerHTML=o;
+  }
+  function render(){
+    var p=P[idx],s=sums(p),est=p.kind==='open'||p.kind==='fc';
+    $('ptitle').textContent=p.t;$('pstate').textContent=p.st;
+    $('pstate').style.color=p.kind==='paid'?'var(--good)':p.kind==='fc'?'var(--muted)':'var(--brand-accent)';
+    $('prev').disabled=idx===0;$('next').disabled=idx===P.length-1;
+    $('t-landed').textContent=money(s.l);$('t-landed-x').textContent=s.l?'from the Partner API':'nothing landed yet';
+    $('t-subs').textContent=est?money(s.s):'—';$('t-subs-x').textContent=est?'live subscriptions, next charge in period':'period is closed';
+    $('t-usage').textContent=est?'~'+round(s.u):'—';$('t-usage-x').textContent=est?'range '+round(p.uRange[0])+'–'+round(p.uRange[1]):'period is closed';
+    var tot=s.l+s.s+s.u;
+    $('t-total-l').textContent=p.kind==='paid'?'Paid':est?'Expected payout':'Payout (final)';
+    $('t-total').textContent=(est?'~':'')+(est?round(tot):money(tot));
+    $('t-total-x').textContent=est?round(s.l+s.s+p.uRange[0])+'–'+round(s.l+s.s+p.uRange[1]):'exact';
+    $('c-title').textContent=(est?'Expected ':'Paid ')+'by day';
+    $('c-note').textContent=p.kind==='open'?'Left of the line: landed. Right of the line: forecast.':p.kind==='fc'?'All forecast. Nothing has landed yet.':'All landed.';
+    draw(p);
+    var rows=p.kind==='open'?ROWS.open:p.kind==='fc'?ROWS.fc:ROWS.past,h='';
+    rows.filter(function(r){return filter==='all'||r[2]===filter;}).forEach(function(r){
+      var c=r[2]==='Landed'?'c-ok':r[2]==='Due'?'c-brand':'c-part';
+      h+='<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td><span class="chip '+c+'">'+r[2]+'</span></td><td>'+r[3]+'</td><td class="num">'+(r[2]==='Estimated'?'~':'')+(r[4]<0?'−'+money(-r[4]):money(r[4]))+'</td><td class="rec">'+r[5]+'</td></tr>';});
+    $('rows').innerHTML=h||'<tr><td colspan="6" class="rec">No lines in this state for this period.</td></tr>';
+  }
+  $('prev').addEventListener('click',function(){if(idx>0){idx--;render();}});
+  $('next').addEventListener('click',function(){if(idx<P.length-1){idx++;render();}});
+  Array.prototype.forEach.call(document.querySelectorAll('.tabs .btn'),function(b){b.addEventListener('click',function(){
+    filter=b.getAttribute('data-f');Array.prototype.forEach.call(document.querySelectorAll('.tabs .btn'),function(x){x.classList.toggle('on',x===b);});render();});});
+  render();
+})();
+</script>
+</html>
