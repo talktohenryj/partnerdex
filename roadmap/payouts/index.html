@@ -234,6 +234,9 @@ pre{font-family:var(--mono);font-size:13px;background:var(--code);padding:12px 1
     <tr><td>Usage</td><td><b>A per-store estimate is fine.</b> But first, sprint 0 checks if PartnerDex can get the billed amount from Shopify, as Mantle does. iziGift's own charge database is the last option.</td></tr>
     <tr><td>Tax</td><td><b>No.</b> Not in sprint 1, and maybe never.</td></tr>
     <tr><td>Upstream</td><td><b>Yes.</b> Upstream-ready, with documentation. Branch from <code>upstream/main</code>.</td></tr>
+    <tr><td>Data source</td><td><b>Stable API only.</b> No historical <code>events</code> query. Paid = <code>transactions</code>. Billed usage = <code>USAGE_CHARGE_APPLIED</code> with no matching transaction (exact). (Sprint 0, revised.)</td></tr>
+    <tr><td>Billed subscriptions</td><td><b>Inferred.</b> A billing cycle that started with no subscription transaction after it is billed and not paid. Labelled as an estimate.</td></tr>
+    <tr><td>Due</td><td><b>A forecast.</b> Next subscription charges and usage not charged yet. Labelled as an estimate, with a range.</td></tr>
     <tr><td>Screens</td><td><b>Henry approves the screens before the build starts.</b> The mockups below are the screens to approve.</td></tr>
   </table></div>
 
