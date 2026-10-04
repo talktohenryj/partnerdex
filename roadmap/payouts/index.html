@@ -135,16 +135,16 @@ pre{font-family:var(--mono);font-size:13px;background:var(--code);padding:12px 1
 </style>
 
 <div class="doc">
-  <p class="eyebrow">PartnerDex · plan · 4 October 2026</p>
+  <p class="eyebrow">PartnerDex · plan · 4 October 2026 · revised after Henry’s answers</p>
   <h1>Payouts: what landed, and what is coming</h1>
   <p class="lede">A Mantle-style payout view in PartnerDex. It shows the past payouts, the payout that is open now, and the two after it. A small card on the Overview shows the same three numbers.</p>
   <nav class="toc" aria-label="Sections">
-    <a href="#data">1 · Data check</a><a href="#questions">2 · Questions</a><a href="#plan">3 · Plan</a><a href="#mock-overview">Mockup · Overview</a><a href="#mock-payouts">Mockup · Payouts page</a>
+    <a href="#data">1 · Data check</a><a href="#questions">2 · Decisions</a><a href="#plan">3 · Plan</a><a href="#mock-overview">Mockup · Overview</a><a href="#mock-payouts">Mockup · Payouts page</a>
   </nav>
 
   <div class="answer">
     <p><b>Short answer.</b> PartnerDex has almost all of the data. It holds every paid transaction (gross, net, Shopify fee, shop, date) and every live subscription with its price and last charge date. That gives exact past payouts and a good subscription forecast.</p>
-    <p>Two pieces are missing. The Partner API has <b>no payout object</b>, so PartnerDex must compute the payout calendar itself. PartnerDex also cannot see <b>usage that is billed but not yet paid</b>. Mantle sees that usage because iziGift reports it to Mantle. PartnerDex must estimate it from each store's past usage. This is about two sprints, so one small roadmap with two pages is enough.</p>
+    <p>The Partner API has <b>no payout object</b>, so PartnerDex computes the payout calendar itself. The open question is <b>usage that is billed but not yet paid</b>. iziGift does not send it to Mantle, so Mantle reads it from Shopify. Sprint 0 finds out if PartnerDex can read it the same way. If not, PartnerDex estimates it from each store's past usage.</p>
   </div>
 
   <h2 id="data">1 · Data check</h2>
@@ -154,53 +154,73 @@ pre{font-family:var(--mono);font-size:13px;background:var(--code);padding:12px 1
     <tr><td><b>Past payouts</b> (Sep 16–30 → Oct 7)</td><td><code>transactions</code>: all five app sale types, with <code>created_at</code>, <code>gross_amount</code>, <code>net_amount</code>, <code>shopify_fee</code>, per shop. Sum by payout period.</td><td><span class="chip c-ok">Have</span></td></tr>
     <tr><td><b>Paid</b> in the open period</td><td>The same table, for the transactions that already arrived in this period.</td><td><span class="chip c-ok">Have</span></td></tr>
     <tr><td><b>Upcoming</b> subscription charges</td><td><code>subscriptions</code>: <code>amount</code>, <code>billing_interval</code>, <code>last_sale_at</code>, <code>churn_at</code>, <code>frozen_at</code>. Next charge = last charge + 30 days (or + 1 year). <code>app_events.billing_on</code> gives a second check.</td><td><span class="chip c-ok">Have</span></td></tr>
-    <tr><td><b>Billed subscriptions</b> (on the merchant's bill, not paid yet)</td><td>Not in the Partner API. The forecast puts these into "Subscriptions due".</td><td><span class="chip c-part">Estimate</span></td></tr>
-    <tr><td><b>Billed usage</b> ($1,532.95 of the $1,647.49 Oct 22 payout)</td><td>Not in the Partner API. Mantle gets it from iziGift's own usage records. PartnerDex has each store's past <code>AppUsageSale</code> amounts and dates, so it can estimate the next charge per store.</td><td><span class="chip c-part">Estimate</span></td></tr>
-    <tr><td><b>Payout date</b> and period rule</td><td>No payout object in the stable Partner API. The unstable API has an <code>Earning</code> object with a <code>settlementDate</code>, but no payout id or status. PartnerDex computes the period from a rule, and Henry confirms the rule once against the Partner Dashboard.</td><td><span class="chip c-no">Missing</span></td></tr>
-    <tr><td>Tax and payout fees</td><td>Shopify rolls tax into one <code>TAX</code> transaction per payout. Sync skips non-app transactions today. Small amounts; see question 4.</td><td><span class="chip c-no">Missing</span></td></tr>
+    <tr><td><b>Billed subscriptions</b> (on the merchant's bill, not paid yet)</td><td>Same source question as billed usage (sprint 0). If not available, the forecast puts these into "Subscriptions due".</td><td><span class="chip c-part">Estimate</span></td></tr>
+    <tr><td><b>Billed usage</b> ($1,532.95 of the $1,647.49 Oct 22 payout)</td><td>Mantle gets this from Shopify, not from iziGift. PartnerDex may already hold it in its transactions, or can read it from the new historical events query. Sprint 0 checks. If neither works, PartnerDex estimates it per store from past usage charges.</td><td><span class="chip c-part">Estimate</span></td></tr>
+    <tr><td><b>Payout date</b> and period rule</td><td>No payout object in the stable Partner API. PartnerDex computes it: 1st–15th pays on the 22nd, 16th–month end pays on the 7th (5 business days after the period ends). Confirmed by Henry.</td><td><span class="chip c-ok">Rule set</span></td></tr>
+    <tr><td>Tax and payout fees</td><td>Shopify rolls tax into one <code>TAX</code> transaction per payout. Sync skips non-app transactions today. Small amounts. Out of scope.</td><td><span class="chip c-no">Missing</span></td></tr>
   </table></div>
   <p class="rec">Already built that helps: the trailing 30-day usage figure inside MRR (<code>usageSeries</code> in <code>src/metrics/asof.ts</code>), and a window resolver that already accepts future dates (<code>allowFutureDates</code> in <code>src/metrics/time.ts</code>, with no caller yet). PartnerDex has no forecast code today.</p>
-  <p class="rec">One useful fact from the screenshot: Mantle's Oct 16–31 figure ($522.86) is low because Mantle does not forecast usage at all. It shows only usage that iziGift already billed. PartnerDex can do better on the periods after the open one.</p>
+  <p class="rec">One useful fact from the screenshot: Mantle's Oct 16–31 figure ($522.86) is low because Mantle does not forecast usage at all. It shows only usage that is already billed. PartnerDex can do better on the periods after the open one.</p>
 
-  <h2 id="questions">2 · Questions for you</h2>
-  <p>Each question has my recommendation. A short "yes" to all of them is enough to start.</p>
-  <ol class="q">
-    <li><b>Which period rule does Shopify use for you?</b>Mantle shows 1st–15th paid on the 22nd, and 16th–month end paid on about the 7th. The Shopify help page describes a different split (1st–10th, 11th to 5 days before month end, last 5 days). <span class="rec">Recommendation: send me two past payouts from Partner Dashboard → Payouts (date, amount), or the payouts CSV. Sprint 1 builds the rule and proves it against them.</span></li>
-    <li><b>Show net or gross as the headline?</b><span class="rec">Recommendation: net. Net is the money that reaches your bank. Gross and the Shopify fee show in the period detail.</span></li>
-    <li><b>Is a per-store usage estimate good enough?</b>For each store, the estimate takes the average of its last three usage charges and puts it on the store's next bill date. It shows a low–high range, not one exact number. <span class="rec">Recommendation: yes for now. Later, iziGift can send its usage records to PartnerDex (the same producer as Usage Metrics sprint 2). Then "Billed usage" becomes exact, like Mantle.</span></li>
-    <li><b>Include tax transactions?</b><span class="rec">Recommendation: no for sprint 1. Sync them in sprint 2 only if the totals do not match the Partner Dashboard within about 1%.</span></li>
-    <li><b>Fork only, or upstream to Aditya?</b>Nothing here is iziGift-specific. <span class="rec">Recommendation: build it upstream-ready. Branch from <code>upstream/main</code>, as the fork rules say. It needs no migration, so there is no number conflict.</span></li>
-  </ol>
+  <h2 id="questions">2 · Decisions (Henry, 4 Oct)</h2>
+  <div class="tw"><table>
+    <tr><th>Question</th><th>Decision</th></tr>
+    <tr><td>Payout period rule</td><td><b>1st–15th pays on the 22nd. 16th–month end pays on the 7th.</b> In code, the payout date is 5 business days after the period ends. That rule gives Oct 7, Oct 22 and Nov 6, the same dates Mantle shows.</td></tr>
+    <tr><td>Headline number</td><td><b>Net.</b> Gross and the Shopify fee show in the period detail.</td></tr>
+    <tr><td>Usage</td><td><b>A per-store estimate is fine.</b> But first, sprint 0 checks if PartnerDex can get the billed amount from Shopify, as Mantle does. iziGift's own charge database is the last option.</td></tr>
+    <tr><td>Tax</td><td><b>No.</b> Not in sprint 1, and maybe never.</td></tr>
+    <tr><td>Upstream</td><td><b>Yes.</b> Upstream-ready, with documentation. Branch from <code>upstream/main</code>.</td></tr>
+    <tr><td>Screens</td><td><b>Henry approves the screens before the build starts.</b> The mockups below are the screens to approve.</td></tr>
+  </table></div>
+
+  <h3>Where Mantle gets "billed" amounts</h3>
+  <p>iziGift sends Mantle only the store ID, domain, email, contacts and custom fields (<code>APIService::updateMantleProfile</code> and the identify calls). It sends no usage amounts and no store access token. So Mantle gets its billed figures from Shopify's Partner data, not from iziGift.</p>
+  <p>There are two possible places in the Partner API:</p>
+  <ul>
+    <li><b>The transactions feed PartnerDex already syncs.</b> If Shopify records a usage sale when the charge goes onto the merchant's bill, PartnerDex already holds the billed usage. Only the "paid or not yet paid" flag is missing.</li>
+    <li><b>The new historical events query</b> (unstable API version). It lists charges and earnings, and each earning has a <code>settlementDate</code>. An earning with no settlement date yet is a billed, unpaid amount.</li>
+  </ul>
+  <p>Sprint 0 tests both. The test is quick: compare PartnerDex's Oct 1–15 transactions with Mantle's customer list for the same period (for example, New West KnifeWorks $108.24).</p>
 
   <h2 id="plan">3 · Plan</h2>
-  <p>Two sprints. Sprint 1 is the engine and its proof. Sprint 2 is the two screens. No schema change: everything reads tables that exist today.</p>
+  <p>"Engine" is the back end: the calculations, the API, and the tests. It changes nothing on the screen. "Screens" is the front end: the Payouts page and the Overview card that read from the engine. No schema change in either.</p>
   <div class="sprints">
     <div class="sprint">
-      <span class="chip c-brand">Sprint 1 · engine</span>
-      <h3>Payout calendar, history, forecast</h3>
+      <span class="chip c-part">Sprint 0 · half a day</span>
+      <h3>Find the billed data</h3>
       <ul>
-        <li><code>src/payouts/calendar.ts</code>: period rule → period start, end, payout date. Business-day aware.</li>
-        <li><code>src/payouts/history.ts</code>: sum net, gross and fee per period, split into subscription, usage, one-time and adjustments.</li>
-        <li><code>src/payouts/forecast.ts</code>: subscriptions due (live, not frozen, next charge in the period, not charged yet) + usage estimate per store with a low–high range.</li>
-        <li>Backtest: run the forecast "as of" day 4 of each past period and compare with what landed. This gives a real accuracy number, and PartnerDex can do it because it rebuilds any past date.</li>
-        <li><code>GET /api/payouts?period=2026-10-a</code> and a <code>partnerdex payouts</code> CLI command.</li>
-        <li>Tests: calendar edges (month end, weekends, February), forecast with churn and frozen stores, backtest.</li>
+        <li>Compare PartnerDex transactions for Oct 1–15 with Mantle's list for the same period.</li>
+        <li>Run the unstable historical events query (charges, earnings, <code>settlementDate</code>) with the PartnerDex token.</li>
+        <li>Result: "billed" is <b>exact</b> (from Shopify) or <b>estimated</b> (from past usage). This choice sets the forecast in sprint 1.</li>
+        <li>Henry approves the mockups in the same step.</li>
       </ul>
     </div>
     <div class="sprint">
-      <span class="chip c-brand">Sprint 2 · screens</span>
+      <span class="chip c-brand">Sprint 1 · engine (back end)</span>
+      <h3>Payout calendar, history, forecast</h3>
+      <ul>
+        <li><code>src/payouts/calendar.ts</code>: 1st–15th and 16th–end periods, payout date 5 business days after the period ends.</li>
+        <li><code>src/payouts/history.ts</code>: net, gross and fee per period, split into subscription, usage, one-time and adjustments.</li>
+        <li><code>src/payouts/forecast.ts</code>: subscriptions due + usage (billed if sprint 0 finds it, else the per-store estimate with a range).</li>
+        <li>Backtest: run the forecast "as of" day 4 of each past period and compare it with what landed.</li>
+        <li><code>GET /api/payouts</code> and a <code>partnerdex payouts</code> CLI command. README section.</li>
+        <li>Tests: month ends, weekends, February, churn and frozen stores, backtest.</li>
+      </ul>
+    </div>
+    <div class="sprint">
+      <span class="chip c-brand">Sprint 2 · screens (front end)</span>
       <h3>Payouts page and Overview card</h3>
       <ul>
-        <li>New <b>Payouts</b> page under Reports: period stepper (Previous / Next, up to two periods ahead), four tiles, a daily chart, and a per-store table.</li>
-        <li>Each line shows its state: <b>Landed</b>, <b>Due</b>, or <b>Estimated</b>. Estimates always show the range.</li>
-        <li>New <b>Payouts</b> card on the Overview. It is the sixth card, so the grid becomes two full rows of three.</li>
-        <li>Optional Slack note when a payout period closes, with landed vs. forecast.</li>
-        <li>Then decide on question 3's iziGift usage feed, if the backtest shows usage error above about 15%.</li>
+        <li>The approved Payouts page under Reports: period stepper, four tiles, daily chart, per-store table.</li>
+        <li>The approved Payouts card on the Overview.</li>
+        <li>Henry sees both screens with his real numbers on a preview before merge.</li>
+        <li>Upstream pull request with documentation and screenshots.</li>
       </ul>
     </div>
   </div>
-  <pre>Sprint 1  calendar ──► history ──► forecast ──► backtest ──► API + CLI
-Sprint 2                                  API ──► Payouts page
+  <pre>Sprint 0  billed-data check + mockup approval
+Sprint 1  calendar ──► history ──► forecast ──► backtest ──► API + CLI
+Sprint 2                                  API ──► Payouts page   ──► preview ──► PR
                                           API ──► Overview card</pre>
 </div>
 
