@@ -180,6 +180,8 @@ pre{font-family:var(--mono);font-size:13px;background:var(--code);padding:12px 1
     <li><b>The transactions feed PartnerDex already syncs.</b> If Shopify records a usage sale when the charge goes onto the merchant's bill, PartnerDex already holds the billed usage. Only the "paid or not yet paid" flag is missing.</li>
     <li><b>The new historical events query</b> (unstable API version). It lists charges and earnings, and each earning has a <code>settlementDate</code>. An earning with no settlement date yet is a billed, unpaid amount.</li>
   </ul>
+  <p><b>What Mantle Brain says</b> (Mantle's own open rebuild guides, <code>Hey-Mantle/mantle-brain</code>). Mantle pulls Shopify's transactions from the Partner API into a charges table on a schedule. Each charge has a status: upcoming, billed, due or paid. Payout = net − refunds − taxes − app credits, bucketed into 1st–15th and 16th–month end windows. App credits cut the payout but never MRR. So Mantle's "billed" amounts come from the same transactions feed PartnerDex already syncs.</p>
+  <p>One detail matters for the calendar. Mantle's customer list shows two dates per store: the app billing date (Root Rescue: Sep 28) and a later Shopify bill date (Oct 1x). Mantle puts Root Rescue's $3.99 in the Oct 1–15 payout, not Sep 16–30. So the payout window follows the date the merchant pays their Shopify bill, not the date the app charge was created. Sprint 0 confirms this with real transactions.</p>
   <p>Sprint 0 tests both. The test is quick: compare PartnerDex's Oct 1–15 transactions with Mantle's customer list for the same period (for example, New West KnifeWorks $108.24).</p>
 
   <h2 id="plan">3 · Plan</h2>
