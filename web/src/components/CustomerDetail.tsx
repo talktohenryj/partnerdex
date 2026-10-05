@@ -176,6 +176,25 @@ function writeReviewLink(listingUrl: string): string {
 }
 
 /**
+ * The one review to sit beside the merchant's status.
+ *
+ * A review belongs to one app, and the heading has room for one badge. A
+ * review still on the listing wins over one that is gone — a removal must not
+ * hide what the merchant is publicly saying today. Among those, the lowest
+ * rating is the one worth seeing first. Any others are a count.
+ */
+function reviewBesideStatus(apps: CustomerApp[]): { app: CustomerApp; more: number } | null {
+  const live = apps.filter((app) => app.review !== null && app.review.removedAt === null);
+  const gone = apps.filter((app) => app.review !== null && app.review.removedAt !== null);
+  const pool = live.length > 0 ? live : gone;
+  if (pool.length === 0) return null;
+  const sorted = [...pool].sort(
+    (a, b) => a.review!.rating - b.review!.rating || a.appId.localeCompare(b.appId),
+  );
+  return { app: sorted[0]!, more: pool.length - 1 };
+}
+
+/**
  * The review this merchant left for this app, or a way to ask for one.
  *
  * Only the stars and whether it still stands are shown inline — a table row is
@@ -374,9 +393,9 @@ function AppsTable({ rows, currency }: { rows: CustomerApp[]; currency: string |
               <th>Price</th>
               <th>MRR</th>
               <th>Status</th>
+              <th>Review</th>
               <th>Since</th>
               <th>Payments</th>
-              <th>Review</th>
             </tr>
           </thead>
           <tbody>
@@ -400,6 +419,9 @@ function AppsTable({ rows, currency }: { rows: CustomerApp[]; currency: string |
                 <td>
                   <StatusPill status={row.status} />
                 </td>
+                <td>
+                  <ReviewCell app={row} />
+                </td>
                 <td>{row.since ? formatFullDate(row.since) : '—'}</td>
                 <td>
                   {row.paymentCount}
@@ -408,9 +430,6 @@ function AppsTable({ rows, currency }: { rows: CustomerApp[]; currency: string |
                       {formatValue(row.paidGross, 'money', row.currency ?? currency)}
                     </span>
                   ) : null}
-                </td>
-                <td>
-                  <ReviewCell app={row} />
                 </td>
               </tr>
             ))}
@@ -554,6 +573,7 @@ export function CustomerDetail({
   );
   const payingApps = detail.apps.filter((app) => app.status === 'paying').length;
   const share = detail.lifetimeGross - detail.lifetimeNet;
+  const headerReview = reviewBesideStatus(detail.apps);
 
   return (
     <>
@@ -562,9 +582,23 @@ export function CustomerDetail({
           <a className="back-link" href="#/customers">
             ← All customers
           </a>
-          <h2 className="customer-title">
-            {detail.name ?? detail.domain ?? detail.shopId} <StatusPill status={detail.status} />
-          </h2>
+          <div className="customer-title">
+            <h2>{detail.name ?? detail.domain ?? detail.shopId}</h2>
+            <StatusPill status={detail.status} />
+            {headerReview ? (
+              <div className="customer-review">
+                <ReviewCell app={headerReview.app} />
+                {headerReview.more > 0 ? (
+                  <span
+                    className="customer-review-more"
+                    title={`Lowest rating. ${headerReview.more} more review${headerReview.more === 1 ? '' : 's'}.`}
+                  >
+                    +{headerReview.more}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           {detail.domain ? (
             <a
               className="customer-domain-link"

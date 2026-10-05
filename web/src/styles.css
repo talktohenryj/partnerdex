@@ -992,11 +992,27 @@ thead th {
 
 .customer-title {
   margin: 6px 0 2px;
-  font-size: 20px;
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.customer-title h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.customer-review {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.customer-review-more {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .customer-domain-link {
