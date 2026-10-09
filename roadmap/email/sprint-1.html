@@ -1,0 +1,208 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Email — S1 · Audiences</title><style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
+--ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
+--brand:#f0a36b;--brand-soft:#33241a;--ok:#6fd3a0;--ok-soft:#173326;--warn:#f2c14e;--warn-soft:#332a12;--info:#8fb5ff;--info-soft:#1a2540;--code:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+nav.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px}
+nav.top a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px;font-size:13px}
+nav.top a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-top:8px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
+ol.build>li{margin:0 0 14px}ol.build b{display:block}
+.note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
+.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
+.mtile .d{font-size:12px;color:var(--ok)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
+.pill.on{border-color:var(--brand);color:var(--brand)}
+
+.mock .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.mock label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
+.mock .in{border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:var(--bg);font-size:14px;min-width:200px}
+.mock .ta{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg);font-size:14px;white-space:pre-wrap;font-family:inherit}
+.btn{display:inline-block;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.btn.p{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.x{background:#b42318;border-color:#b42318;color:#fff}
+.cb{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;margin:0 6px 6px 0}
+.cb.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600}
+.cb i{width:12px;height:12px;border:1.5px solid currentColor;border-radius:3px;display:inline-block}
+.cb.on i{background:currentColor}
+.mtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-4px 0 12px}
+.mtabs span{padding:6px 12px;font-size:13px;color:var(--muted)}.mtabs span.on{color:var(--brand);border-bottom:2px solid var(--brand);font-weight:600}
+.warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.split{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:14px}
+@media (max-width:720px){.split{grid-template-columns:1fr}}
+.envelope{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg);font-size:14px}
+.envelope .h{font-size:12px;color:var(--muted)}
+.foot{font-size:12px;color:var(--muted);border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
+.tiny{font-size:12px;color:var(--muted)}
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html" class="on">S1 · Audiences</a><a href="sprint-2.html">S2 · Compose + send</a><a href="sprint-3.html">S3 · Delivery + history</a><a href="sprint-4.html">S4 · Lifecycle (open)</a></nav><main>
+<h1>Sprint 1 — Audiences</h1>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · branch off <code>email-upstream</code> · migration 4 (see <a href="index.html">Q1</a>)</p>
+
+<h2>Why this ships now</h2>
+<p>The split is the hard, valuable half. Today the only filters on people are hygiene filters (<code>ContactLinkedFilter</code> in <code>src/contacts/list.ts</code>), and the store status that decides who should hear what lives privately inside <code>src/customers/index.ts</code> (<code>statusOf()</code>). This sprint joins the two: pick an app, the store statuses, and the roles, and see exactly who that is — with suppression, unlinked, and ambiguous people already removed and each person counted once.</p>
+
+<h2>Why this is independently deployable</h2>
+<p>One migration that only creates a table, one router behind <code>requireAuth</code>, one page. The only edit to existing code is extracting the per-shop status query in <code>src/customers/index.ts</code> into an exported helper that the Customers list keeps using unchanged, and exporting <code>sortShops</code> from <code>src/contacts/list.ts</code>. If S2 never ships, Henry still gets a counted, deduped, suppression-clean list he can export as CSV and paste into any sender.</p>
+
+<h2>Build</h2>
+<ol class="build">
+<li><b>Branch</b>
+<code>git fetch origin contacts-upstream &amp;&amp; git checkout -b email-upstream origin/contacts-upstream &amp;&amp; git push -u origin email-upstream</code>, then this sprint's branch <code>email/s1-audiences</code> off it. Do not branch from fork <code>main</code> (index → Branching).</li>
+
+<li><b>Migration 4 — <code>src/db/migrate.ts</code></b>
+Add <code>EMAIL_AUDIENCES_SCHEMA_SQL</code> after <code>CONTACTS_SCHEMA_SQL</code> and <code>{ version: 4, up: (db) =&gt; db.exec(EMAIL_AUDIENCES_SCHEMA_SQL) }</code>. Check upstream <code>main</code> for a 4 first; <code>test/migrate.test.ts</code> enforces 1..N with no gaps.
+<pre>CREATE TABLE IF NOT EXISTS email_audiences (
+  id          TEXT PRIMARY KEY,          -- crypto.randomUUID()
+  name        TEXT NOT NULL,
+  definition  TEXT NOT NULL,             -- JSON AudienceDefinition
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+) WITHOUT ROWID;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_email_audiences_name ON email_audiences (lower(name));</pre>
+Role 4 (durable): add <code>email_audiences</code> to the durable list in the header comment of <code>src/db/schema.ts</code>.</li>
+
+<li><b>Status helper — <code>src/customers/index.ts</code></b>
+Today <code>listCustomers()</code> runs <code>summarySql()</code> and maps each row through <code>statusOf(row, row.everSubscribed)</code>; both are private. Add and export:
+<pre>export interface ShopStatus { shopId: string; name: string | null; domain: string | null;
+  status: CustomerStatus; mrr: number; currency: string | null }
+export function shopStatuses(db: Db, appId: string): Map&lt;string, ShopStatus&gt;</pre>
+It calls <code>summarySql([appId], false)</code> with <code>now = new Date().toISOString()</code>, no LIMIT, and maps rows with <code>statusOf</code>. One app at a time on purpose: a store paying for app A and churned from app B must read as <i>churned</i> for B's email. <code>listCustomers()</code> is not changed.</li>
+
+<li><b>Export the primary-shop rule — <code>src/contacts/list.ts</code></b>
+Export the existing <code>sortShops()</code> (owner first, then highest MRR) so the resolver picks the same "primary" store the Contacts page shows. No behaviour change.</li>
+
+<li><b>Audience model + resolver — <code>src/email/audience.ts</code> (new)</b>
+<pre>export const STATUSES = ['paying','trialing','installed','churned','gone'] as const;
+export interface AudienceDefinition { appId: string; statuses: CustomerStatus[]; roles: ContactRole[] }
+export interface Recipient { email: string; firstName: string|null; lastName: string|null;
+  shopId: string; shopName: string|null; shopDomain: string|null; role: ContactRole; status: CustomerStatus }
+export interface AudienceResult { recipients: Recipient[];
+  excluded: { suppressed: number; ambiguous: number; noStatus: number; merged: number };
+  byStatus: Record&lt;CustomerStatus, number&gt;; byRole: Record&lt;ContactRole, number&gt; }
+export function validateDefinition(input: unknown, db?: Db): AudienceDefinition   // throws EmailError(…, 422)
+export function resolveAudience(def: AudienceDefinition, db = getDb()): AudienceResult</pre>
+<code>validateDefinition</code>: <code>appId</code> normalized with <code>normalizeAppId()</code> and checked with <code>assertAppInScope()</code>; <code>statuses</code> and <code>roles</code> non-empty subsets of the allowed values, deduped. <code>EmailError</code> mirrors <code>ContactsError</code> (message + status) in <code>src/email/errors.ts</code>.<br>
+<code>resolveAudience</code>, in this order:
+<ol>
+<li>Load candidate memberships: <code>SELECT cs.email, cs.shop_id, cs.role, cs.match_method, c.first_name, c.last_name, c.is_suppressed, (sup.email IS NOT NULL) AS hard_suppressed FROM contact_shops cs JOIN contacts c ON c.email = cs.email LEFT JOIN contact_suppressions sup ON sup.email = cs.email WHERE cs.app_id = @appId AND cs.role IN (…roles)</code>. Unlinked people have no row here, so they are out by construction.</li>
+<li>Join each row to <code>shopStatuses(db, appId)</code>. No entry → count in <code>noStatus</code>, drop. Status not in <code>statuses</code> → drop silently (not "excluded", just not asked for).</li>
+<li><code>match_method = 'ambiguous'</code> → count in <code>ambiguous</code>, drop (Q3).</li>
+<li><code>is_suppressed = 1</code> or a <code>contact_suppressions</code> row → count in <code>suppressed</code>, drop. Both checks, because the mirror can lag a hand-edited row.</li>
+<li>Group survivors by email; keep the first by <code>sortShops</code> order (owner, then MRR); each extra row adds 1 to <code>merged</code>.</li>
+<li>Sort recipients by shop name, then email. Fill <code>byStatus</code> / <code>byRole</code> from the kept rows.</li>
+</ol>
+Counting <code>suppressed</code>/<code>ambiguous</code>/<code>noStatus</code> is per <i>person</i> (distinct email) among those who matched the status + role filter, so the UI line "12 left out" is a number of people.</li>
+
+<li><b>CSV writer — <code>src/email/csv.ts</code> (new)</b>
+<code>toCsv(recipients): string</code> with header <code>email,first_name,last_name,role,store,store_domain,status</code>; RFC 4180 quoting; prefix cells that start with <code>= + - @</code> with <code>'</code> (spreadsheet formula injection). <code>src/contacts/csv.ts</code> is a parser only; do not reuse it for writing.</li>
+
+<li><b>Store — <code>src/email/audiences.ts</code> (new)</b>
+<code>listAudiences(db)</code>, <code>getAudience(id, db)</code>, <code>createAudience({name, definition}, db)</code>, <code>updateAudience(id, {name?, definition?}, db)</code>, <code>deleteAudience(id, db)</code>. Name trimmed, 1–80 chars, unique case-insensitively (409 on clash). Definition stored as <code>JSON.stringify(validateDefinition(x))</code>; on read, a definition whose <code>appId</code> is no longer in scope is returned with <code>stale: true</code> instead of throwing.</li>
+
+<li><b>Router — <code>src/server/email.ts</code> (new)</b>
+<code>emailRouter()</code>, mounted in <code>src/server/index.ts</code> <b>after</b> <code>app.use('/api', requireAuth)</code> as <code>app.use('/api/email', emailRouter())</code>. Errors via <code>sendError()</code>.
+<div class="tw"><table>
+<tr><th>Route</th><th>Body / query</th><th>Response</th></tr>
+<tr><td><code>POST /audiences/preview</code></td><td><code>{ definition }</code></td><td><code>{ count, excluded, byStatus, byRole, sample: Recipient[≤25] }</code></td></tr>
+<tr><td><code>GET /audiences</code></td><td>—</td><td><code>{ audiences: [{ id, name, definition, stale, count }] }</code> (count resolved live)</td></tr>
+<tr><td><code>POST /audiences</code></td><td><code>{ name, definition }</code></td><td>201 + audience</td></tr>
+<tr><td><code>PUT /audiences/:id</code> · <code>DELETE /audiences/:id</code></td><td><code>{ name?, definition? }</code></td><td>200 / 204</td></tr>
+<tr><td><code>GET /audiences/export.csv</code></td><td><code>?appId=&amp;statuses=paying,trialing&amp;roles=owner,staff</code> or <code>?id=</code></td><td><code>text/csv</code>, <code>Content-Disposition: attachment; filename="audience-YYYY-MM-DD.csv"</code></td></tr>
+</table></div>
+The express JSON limit (<code>64kb</code>) is enough; do not raise it.</li>
+
+<li><b>Page — <code>web/src/pages.ts</code>, <code>web/src/App.tsx</code>, <code>web/src/components/Email.tsx</code> (new)</b>
+Add a <code>PageSpec</code> <code>{ id: 'email', label: 'Email', title: 'Email', kind: 'email', cards: [] }</code> placed after <code>contacts</code>; add <code>'email'</code> to the <code>kind</code> union and an <code>isEmail</code> branch in <code>App.tsx</code> beside <code>isContacts</code> (opts out of the window controls the same way). <code>Email.tsx</code> renders tabs; S1 ships only <b>Audiences</b> (S2 adds Campaigns and Settings — render the tab strip from an array so S2 appends). Audiences tab:
+<ul>
+<li>App picker (from <code>/api/apps</code>, as other pages do) — hidden when only one app is in scope.</li>
+<li>Status checkboxes with each status's live count beside it; role checkboxes likewise. Defaults: <b>paying</b> + all three roles.</li>
+<li>Debounced (300 ms) <code>POST /audiences/preview</code> on every change. Big number: "<b>N people</b>". Line under it: "X left out — S suppressed · A store match not confirmed · U no status in this app · M duplicates merged", each linking to the matching Contacts filter where one exists.</li>
+<li>Sample table: name, email, store, role, status. "Showing 25 of N".</li>
+<li>Buttons: <b>Save audience</b> (name prompt), <b>Export CSV</b>. Saved audiences list on the left with live counts; click loads the definition; stale ones show a warning chip.</li>
+</ul>
+Copy for the five statuses (from <code>statusOf</code>): Paying — a live paid subscription; Trialing — inside a free trial; Installed — installed, not paying, never in trial now (free plan); Churned — paid before, no install or subscription now; Gone — installed before, never paid, not installed now.</li>
+
+<li><b>Tests — <code>test/emailAudience.test.ts</code> (new)</b>
+Build fixtures through <code>test/helpers.ts</code> (<code>resetEnvironment</code>, real ingest/derive) plus <code>upsertContact()</code> for people. Cases listed below.</li>
+</ol>
+
+<h2>Acceptance</h2>
+<div class="tw"><table>
+<tr><th>Scenario</th><th>Expected</th></tr>
+<tr><td>Owner A of a paying store; definition paying + owner</td><td>A is in, status <code>paying</code>, count 1</td></tr>
+<tr><td>Staff B of the same paying store; roles = owner only</td><td>B not in; not counted as "left out" (just not asked for)</td></tr>
+<tr><td>Person C manages a paying store (staff) and another paying store (owner)</td><td>C appears once, primary store = the owned one; <code>merged = 1</code></td></tr>
+<tr><td>Person D on a paying store, suppressed</td><td>Not in; <code>excluded.suppressed = 1</code></td></tr>
+<tr><td>Person E with a <code>contact_suppressions</code> row but <code>is_suppressed = 0</code> (lagged mirror)</td><td>Not in; counted as suppressed</td></tr>
+<tr><td>Person F with an <code>ambiguous</code> link to a paying store</td><td>Not in; <code>excluded.ambiguous = 1</code></td></tr>
+<tr><td>Unlinked person G</td><td>Never in, never counted</td></tr>
+<tr><td>Store pays for app 111, churned from app 222; audience on app 222, status churned</td><td>Its contacts under app 222 are in; under 111 they are not</td></tr>
+<tr><td>Contact linked to a shop that has no events/installs in scope</td><td><code>excluded.noStatus</code> +1</td></tr>
+<tr><td>Preview with <code>statuses: []</code> or an unknown role / out-of-scope app</td><td>422 with a message naming the field</td></tr>
+<tr><td>Save two audiences named "Paying owners" and "paying OWNERS"</td><td>Second is 409</td></tr>
+<tr><td>Export CSV for an audience with a contact named <code>=HYPERLINK(…)</code></td><td>Cell written as <code>'=HYPERLINK(…)</code>; row count = preview count</td></tr>
+<tr><td>Dashboard password set, no cookie, <code>POST /api/email/audiences/preview</code></td><td>401 (behind the gate)</td></tr>
+<tr><td>Customers list before vs after the helper extraction</td><td>Identical output (existing customer tests stay green)</td></tr>
+</table></div>
+
+<h2>Tests (named)</h2>
+<ul>
+<li><code>resolves paying owners for one app</code> · <code>role filter excludes staff without counting them</code> · <code>dedupes a multi-store person to the owned store</code></li>
+<li><code>excludes suppressed via mirror</code> · <code>excludes suppressed via suppression row when mirror lags</code> · <code>excludes ambiguous and counts it</code> · <code>never includes unlinked</code></li>
+<li><code>status is per app not per shop</code> · <code>counts contacts on shops with no status</code></li>
+<li><code>preview rejects empty statuses</code> · <code>preview rejects out of scope app</code> · <code>saved audience names are unique case-insensitively</code> · <code>stale audience reads with stale flag</code></li>
+<li><code>csv escapes formula cells</code> · <code>csv row count equals preview count</code> · <code>email routes sit behind requireAuth</code></li>
+<li><code>migrations are 1..4 in order</code> (existing <code>test/migrate.test.ts</code>, updated)</li>
+</ul>
+
+<h2>Explicitly NOT in this sprint</h2>
+<ul>
+<li>Any send, transport, Resend client, or settings — S2.</li>
+<li>MRR / plan / login-recency / usage filters — out of v1.</li>
+<li>Multi-app audiences.</li>
+<li>Editing contacts or suppression from this page (the Contacts page already does it; link to it).</li>
+</ul>
+
+<h2>Design mockup — Audiences tab</h2>
+<div class="mock">
+<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><div><b style="font-size:18px">Email</b><div class="tiny">Message the people who use your apps.</div></div><span class="pill">App: iziGift</span></div>
+<div class="mtabs" style="margin-top:12px"><span class="on">Audiences</span><span>Campaigns</span><span>Settings</span></div>
+<div class="split">
+<div>
+<label>Store status (iziGift)</label>
+<div><span class="cb on"><i></i>Paying · 152</span><span class="cb"><i></i>Trialing · 9</span><span class="cb"><i></i>Installed (free) · 31</span><span class="cb"><i></i>Churned · 118</span><span class="cb"><i></i>Gone · 204</span></div>
+<label style="margin-top:8px">Roles</label>
+<div><span class="cb on"><i></i>Owner</span><span class="cb on"><i></i>Staff</span><span class="cb"><i></i>Collaborator</span></div>
+<div class="mgrid" style="margin-top:10px"><div class="mtile"><div class="l">Will receive</div><div class="v">171 people</div><div class="tiny">at 147 stores</div></div></div>
+<p class="tiny">14 left out — <u>9 suppressed</u> · <u>3 store match not confirmed</u> · 2 no status in this app · 11 duplicates merged</p>
+<div class="row"><span class="btn p">Save audience…</span><span class="btn">Export CSV</span></div>
+</div>
+<div>
+<label>Saved audiences</label>
+<div class="tw"><table><tr><td><b>Paying — owners + staff</b><div class="tiny">paying · owner, staff</div></td><td>171</td></tr><tr><td><b>Win-back — churned owners</b><div class="tiny">churned · owner</div></td><td>96</td></tr><tr><td><b>Trialing — everyone</b><div class="tiny">trialing · all roles</div></td><td>14</td></tr></table></div>
+</div>
+</div>
+<div class="tw"><table><tr><th>Name</th><th>Email</th><th>Store</th><th>Role</th><th>Status</th></tr>
+<tr><td>Aaron Layne</td><td>aaron@peachysunday.com</td><td>Peachy Sunday</td><td>Owner</td><td>Paying</td></tr>
+<tr><td>Addison Arendt</td><td>addison@nettotableseafoods.com</td><td>Net To Table Seafoods</td><td>Staff</td><td>Paying</td></tr>
+<tr><td>Abby Bond</td><td>abby@bondbrandedgear.com</td><td>Plunkett's</td><td>Owner</td><td>Paying</td></tr>
+</table></div>
+<p class="tiny">Showing 3 of 171. Illustrative numbers and placeholder names — not real data.</p>
+</div>
+
+</main></body></html>

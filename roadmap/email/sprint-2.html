@@ -1,0 +1,292 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Email — S2 · Compose + send</title><style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
+--ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
+--brand:#f0a36b;--brand-soft:#33241a;--ok:#6fd3a0;--ok-soft:#173326;--warn:#f2c14e;--warn-soft:#332a12;--info:#8fb5ff;--info-soft:#1a2540;--code:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+nav.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px}
+nav.top a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px;font-size:13px}
+nav.top a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-top:8px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
+ol.build>li{margin:0 0 14px}ol.build b{display:block}
+.note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
+.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
+.mtile .d{font-size:12px;color:var(--ok)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
+.pill.on{border-color:var(--brand);color:var(--brand)}
+
+.mock .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.mock label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
+.mock .in{border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:var(--bg);font-size:14px;min-width:200px}
+.mock .ta{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg);font-size:14px;white-space:pre-wrap;font-family:inherit}
+.btn{display:inline-block;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.btn.p{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.x{background:#b42318;border-color:#b42318;color:#fff}
+.cb{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;margin:0 6px 6px 0}
+.cb.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600}
+.cb i{width:12px;height:12px;border:1.5px solid currentColor;border-radius:3px;display:inline-block}
+.cb.on i{background:currentColor}
+.mtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-4px 0 12px}
+.mtabs span{padding:6px 12px;font-size:13px;color:var(--muted)}.mtabs span.on{color:var(--brand);border-bottom:2px solid var(--brand);font-weight:600}
+.warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.split{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:14px}
+@media (max-width:720px){.split{grid-template-columns:1fr}}
+.envelope{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg);font-size:14px}
+.envelope .h{font-size:12px;color:var(--muted)}
+.foot{font-size:12px;color:var(--muted);border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
+.tiny{font-size:12px;color:var(--muted)}
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Audiences</a><a href="sprint-2.html" class="on">S2 · Compose + send</a><a href="sprint-3.html">S3 · Delivery + history</a><a href="sprint-4.html">S4 · Lifecycle (open)</a></nav><main>
+<h1>Sprint 2 — Compose + send</h1>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · branch <code>email/s2-send</code> off <code>email-upstream</code> · migration 5</p>
+
+<h2>Why this ships now</h2>
+<p>S1 answers "who". This sprint answers "send them this": a plain-text founder email, a test to yourself, a frozen recipient list, a type-the-count confirmation, and a resumable send through Resend with the two things the law and the inbox providers require — a working one-click unsubscribe and a postal footer. Today PartnerDex has no transport, no unsubscribe route, and no record of what was sent to whom.</p>
+
+<h2>Why this is independently deployable</h2>
+<p>New tables (migration 5), new routes, a new background loop, two new tabs. The only edit to existing behaviour is one more value in the <code>suppressContact()</code> source union. With <code>RESEND_API_KEY</code>, <code>PUBLIC_BASE_URL</code>, or <code>EMAIL_LINK_SECRET</code> unset — or with no <code>DASHBOARD_PASSWORD</code> — Test, Prepare, and Send return 403 with the reason, the runner does not start, and the app behaves exactly as after S1. Resend itself refuses addresses on its bounce/complaint suppression list, so sending before S3 is safe; S3 only mirrors those events back.</p>
+
+<h2>Build</h2>
+<ol class="build">
+<li><b>Config — <code>src/config.ts</code></b>
+Add an <code>email</code> block to the config object, beside <code>contactsIngestToken()</code>:
+<pre>email: {
+  resendApiKey: string | null,     // RESEND_API_KEY
+  publicBaseUrl: string | null,    // PUBLIC_BASE_URL, e.g. https://partnerdex.fly.dev — no trailing slash; must be https unless host is localhost
+  linkSecret: string | null,       // EMAIL_LINK_SECRET, ≥ 32 chars or ConfigError at startup
+}</pre>
+And <code>export function sendingBlockedReason(): string | null</code> in <code>src/email/guard.ts</code> (new): returns the first of "Set DASHBOARD_PASSWORD before sending email." / "Set RESEND_API_KEY…" / "Set PUBLIC_BASE_URL…" / "Set EMAIL_LINK_SECRET…" / "Fill in the sender settings…" / null. Add all three to <code>.env.example</code> and to <code>resetEnvironment()</code> in <code>test/helpers.ts</code> as <code>''</code>.</li>
+
+<li><b>Migration 5 — <code>src/db/migrate.ts</code></b>
+<code>EMAIL_SEND_SCHEMA_SQL</code>, <code>{ version: 5, … }</code>. All Role 4.
+<pre>CREATE TABLE IF NOT EXISTS email_settings (
+  id             INTEGER PRIMARY KEY CHECK (id = 1),
+  from_name      TEXT NOT NULL DEFAULT '',
+  from_email     TEXT NOT NULL DEFAULT '',
+  reply_to       TEXT NOT NULL DEFAULT '',
+  footer_address TEXT NOT NULL DEFAULT '',
+  updated_at     TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS email_campaigns (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  subject         TEXT NOT NULL DEFAULT '',
+  preview_text    TEXT NOT NULL DEFAULT '',
+  body            TEXT NOT NULL DEFAULT '',     -- light Markdown
+  audience        TEXT NOT NULL,                -- JSON AudienceDefinition (copied, not referenced)
+  audience_id     TEXT,                         -- the saved audience it was copied from, if any
+  status          TEXT NOT NULL DEFAULT 'draft',-- draft|ready|sending|sent|cancelled|failed
+  from_name       TEXT, from_email TEXT, reply_to TEXT, footer_address TEXT,  -- snapshot at prepare
+  recipient_count INTEGER NOT NULL DEFAULT 0,
+  sent_count      INTEGER NOT NULL DEFAULT 0,
+  failed_count    INTEGER NOT NULL DEFAULT 0,
+  skipped_count   INTEGER NOT NULL DEFAULT 0,
+  batch_seq       INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  prepared_at TEXT, started_at TEXT, finished_at TEXT
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS email_sends (
+  campaign_id     TEXT NOT NULL,
+  email           TEXT NOT NULL,
+  shop_id         TEXT NOT NULL,
+  merge           TEXT NOT NULL,                -- JSON {first_name,last_name,shop_name,shop_domain,app_name}
+  status          TEXT NOT NULL DEFAULT 'queued', -- queued|sending|sent|failed|skipped
+  skip_reason     TEXT,                         -- suppressed|cancelled
+  batch_key       TEXT,
+  resend_id       TEXT,
+  error           TEXT,
+  sent_at TEXT, delivered_at TEXT, opened_at TEXT, clicked_at TEXT,
+  bounced_at TEXT, complained_at TEXT, unsubscribed_at TEXT,   -- S3 fills delivered..complained
+  PRIMARY KEY (campaign_id, email)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_email_sends_status ON email_sends (campaign_id, status);
+CREATE INDEX IF NOT EXISTS idx_email_sends_resend ON email_sends (resend_id) WHERE resend_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_email_sends_email ON email_sends (email);</pre>
+The S3 event columns ship now so S3 needs no migration.</li>
+
+<li><b>Transport — <code>src/email/transport.ts</code> + <code>src/email/resend.ts</code> (new)</b>
+<pre>export interface OutgoingEmail { from: string; to: string; replyTo?: string; subject: string;
+  text: string; html: string; headers: Record&lt;string,string&gt; }
+export interface EmailTransport {
+  sendBatch(emails: OutgoingEmail[], idempotencyKey: string): Promise&lt;{ ids: string[] }&gt;;  // ≤ 100
+  sendOne(email: OutgoingEmail): Promise&lt;{ id: string }&gt;;
+  domainStatus(domain: string): Promise&lt;'verified'|'pending'|'failed'|'not_found'&gt;;
+}</pre>
+<code>resendTransport(apiKey)</code> uses global <code>fetch</code> (no SDK dependency, keeps upstream light): <code>POST https://api.resend.com/emails/batch</code> with <code>Authorization: Bearer</code>, <code>Idempotency-Key</code>, body <code>[{ from, to: [to], reply_to, subject, text, html, headers }]</code>; <code>POST /emails</code> for one; <code>GET /domains</code> and match <code>name</code> case-insensitively. 15 s timeout via <code>AbortSignal.timeout</code>. Throws <code>TransportError { status, retryable, message }</code>: retryable for network errors, 429, and 5xx; not retryable for 4xx. Response ids map to input order. Tests inject a fake transport through <code>setTransportForTests()</code> — never call Resend in tests.</li>
+
+<li><b>Settings — <code>src/email/settings.ts</code> + routes</b>
+<code>getSettings(db)</code> (returns defaults when no row), <code>saveSettings(input, db)</code> (upsert id 1). Validation, 422 per field: <code>from_name</code> 1–80 chars, no CR/LF; <code>from_email</code> and <code>reply_to</code> match a plain address check and are lowercased; <code>footer_address</code> 10–300 chars (a physical postal address — CAN-SPAM). Reply-To may be blank (then omitted). Routes on <code>emailRouter()</code>: <code>GET /settings</code>, <code>PUT /settings</code>, <code>GET /settings/domain</code> → <code>{ domain, status, blockedReason }</code> via <code>transport.domainStatus()</code>. Nothing here is env-configured on purpose (Henry: "sender should be variables we can enter in the interface").</li>
+
+<li><b>Renderer — <code>src/email/render.ts</code> (new)</b>
+<pre>export const MERGE_FIELDS = ['first_name','last_name','shop_name','shop_domain','app_name'] as const;
+export function validateTemplate(subject: string, body: string): void          // 422 on unknown {{tag}}
+export function renderEmail(input: { subject; previewText; body; merge; sender; unsubscribeUrl })
+  : { subject: string; text: string; html: string; headers: Record&lt;string,string&gt; }</pre>
+<ul>
+<li>Merge syntax <code>{{first_name}}</code> and <code>{{first_name|there}}</code> (fallback when blank). Applied to subject and body. Values are HTML-escaped in the html part.</li>
+<li>Markdown subset, no dependency: blank line → paragraph, single newline → <code>&lt;br&gt;</code>, <code>[text](https://…)</code> links (http/https only; anything else renders as text), <code>**bold**</code>, <code>*italic*</code>, bare <code>https://</code> URLs autolinked. Escape first, then format. Text part renders links as <code>text (url)</code>.</li>
+<li>HTML part is a single 560 px column in system font, no images, plus a hidden preheader span carrying <code>previewText</code>.</li>
+<li>Footer on both parts: <code>— </code>, the footer address, "You get this email because you use {{app_name}} on {{shop_name}}.", and "Unsubscribe: &lt;url&gt;".</li>
+<li>Headers: <code>List-Unsubscribe: &lt;{url}&gt;</code> and <code>List-Unsubscribe-Post: List-Unsubscribe=One-Click</code> (RFC 8058).</li>
+<li>From is <code>"{from_name}" &lt;{from_email}&gt;</code> with the name's quotes escaped.</li>
+</ul></li>
+
+<li><b>Unsubscribe tokens + routes — <code>src/email/unsubscribe.ts</code>, <code>src/server/unsubscribe.ts</code> (new)</b>
+Token = <code>base64url(campaignId + "\n" + email)</code> + "." + <code>base64url(HMAC-SHA256(EMAIL_LINK_SECRET, same payload))</code>; verify with <code>crypto.timingSafeEqual</code>. URL <code>${PUBLIC_BASE_URL}/u/${token}</code>. Mount in <code>src/server/index.ts</code> <b>before</b> <code>requireAuth</code> and before the static/SPA fallback: <code>app.use('/u', express.urlencoded({ extended: false, limit: '1kb' }), unsubscribeRouter())</code>.
+<ul>
+<li><code>GET /u/:token</code> → small server-rendered HTML page: "Unsubscribe <i>a***@domain.com</i> from these emails?" + a POST form button. GET never changes state (link scanners prefetch GETs).</li>
+<li><code>POST /u/:token</code> (form button or one-click from the mailbox) → <code>suppressContact(email, { source: 'email_unsubscribe', reason: 'campaign ' + id })</code>, set <code>email_sends.unsubscribed_at</code> if null, answer "You're unsubscribed." Idempotent. Bad token → 400 page, no detail.</li>
+<li>Test-send tokens use campaign id <code>test</code>; POST answers "This was a test email — nothing changed."</li>
+</ul>
+Widen the union in <code>src/contacts/upsert.ts</code> <code>suppressContact()</code> to <code>'resend_webhook' | 'manual' | 'csv_import' | 'email_unsubscribe'</code> (stub source stays <code>app_capture</code>), and add a label for it where the Contacts page shows the suppression source.</li>
+
+<li><b>Campaign store — <code>src/email/campaigns.ts</code> (new)</b>
+<code>createCampaign({ name, audience | audienceId })</code> (copies the saved definition), <code>updateCampaign(id, { name?, subject?, previewText?, body?, audience? })</code>, <code>deleteCampaign(id)</code> (draft/ready only), <code>listCampaigns()</code>, <code>getCampaign(id)</code> (with live counts by status from <code>email_sends</code>). Any content or audience edit on a <code>ready</code> campaign deletes its queued rows and sets it back to <code>draft</code>. Subject 1–200 chars, no CR/LF; preview 0–150; body 1–20 000; <code>validateTemplate()</code> on save. Campaigns in <code>sending|sent|cancelled|failed</code> are read-only (409).</li>
+
+<li><b>Prepare / confirm / send / cancel — <code>src/email/campaigns.ts</code></b>
+<ul>
+<li><code>prepareCampaign(id)</code>: requires <code>sendingBlockedReason() === null</code> and <code>domainStatus === 'verified'</code>, status <code>draft|ready</code>, subject and body present. Runs <code>resolveAudience()</code> (S1); in one transaction deletes old queued rows, inserts one <code>email_sends</code> row per recipient (<code>merge</code> JSON includes <code>app_name</code> from <code>apps.name</code>), snapshots sender settings onto the campaign, sets <code>status='ready'</code>, <code>recipient_count</code>, <code>prepared_at</code>. Returns <code>{ count, excluded, sample[≤10], missingFirstName }</code>. 0 recipients → 422.</li>
+<li><code>startSend(id, confirmCount)</code>: status must be <code>ready</code>; <code>confirmCount === recipient_count</code> else 409 "Type {n} to confirm."; <code>prepared_at</code> within 60 min else 409 "The list is over an hour old. Prepare it again." Sets <code>sending</code>, <code>started_at</code>, wakes the runner.</li>
+<li><code>cancelCampaign(id)</code>: <code>sending|ready</code> → <code>cancelled</code>; queued rows → <code>skipped</code>/<code>cancelled</code>. A batch already in flight completes.</li>
+<li><code>sendTest(id, to?)</code>: renders with the first prepared or resolved recipient's merge values (falls back to placeholders), subject prefixed <code>[Test] </code>, test unsubscribe token, <code>transport.sendOne()</code>. <code>to</code> defaults to settings <code>reply_to</code>. Max 20 tests per campaign per hour (in-memory counter).</li>
+</ul>
+Routes on <code>emailRouter()</code>: <code>GET|POST /campaigns</code>, <code>GET|PUT|DELETE /campaigns/:id</code>, <code>POST /campaigns/:id/render</code> (preview for the first sample recipient; returns <code>{subject,text,html}</code>), <code>POST /campaigns/:id/test</code>, <code>POST /campaigns/:id/prepare</code>, <code>POST /campaigns/:id/send</code> <code>{ confirmCount }</code>, <code>POST /campaigns/:id/cancel</code>.</li>
+
+<li><b>Runner — <code>src/email/runner.ts</code> (new)</b>
+Same shape as <code>src/sync/scheduler.ts</code>: a chained <code>setTimeout</code>, never two ticks at once, <code>startEmailRunner()</code> called from <code>src/server/index.ts</code> next to <code>startSyncScheduler()</code>, and only when <code>sendingBlockedReason()</code> is null. <code>wakeEmailRunner()</code> schedules an immediate tick. Tick (in-process, not the sync worker — it is I/O-bound):
+<ol>
+<li>Pick the oldest campaign with <code>status='sending'</code>. None → sleep 30 s.</li>
+<li><b>Resume first:</b> if rows with <code>status='sending'</code> exist (a crash or deploy mid-batch), resend exactly those rows with their stored <code>batch_key</code>. Resend's idempotency key returns the original result instead of sending twice (keys live 24 h; a batch stuck past 23 h → rows <code>failed</code>, error "idempotency window passed — check Resend before resending").</li>
+<li>Else take the next 100 <code>queued</code> rows by email. Re-check suppression now (someone may have unsubscribed from an earlier campaign mid-send) → those rows <code>skipped</code>/<code>suppressed</code>. In one transaction: <code>batch_seq += 1</code>, <code>batch_key = campaignId + ':' + batch_seq</code>, rows → <code>sending</code>.</li>
+<li>Render each row with <code>renderEmail()</code> from the campaign snapshot and its <code>merge</code>; call <code>transport.sendBatch()</code>.</li>
+<li>Success → rows <code>sent</code>, <code>resend_id</code>, <code>sent_at</code>; bump counters. Non-retryable error → rows <code>failed</code> with the message. Retryable → leave <code>sending</code>, back off 5 s → 10 s → … → 5 min.</li>
+<li>No <code>queued</code> or <code>sending</code> rows left → campaign <code>sent</code> (or <code>failed</code> if every row failed), <code>finished_at</code>. Next tick in 1 s while a campaign is sending (well under Resend's default rate limit).</li>
+</ol>
+Log one line per batch (<code>campaign, batch, sent, failed</code>) — never the recipient addresses.</li>
+
+<li><b>UI — <code>web/src/components/Email.tsx</code> + <code>EmailCampaigns.tsx</code>, <code>EmailCompose.tsx</code>, <code>EmailSettings.tsx</code> (new)</b>
+<ul>
+<li><b>Settings tab:</b> From name, From email, Reply-To, Footer postal address; Save; a domain chip (Verified / Pending / Not in Resend) from <code>/settings/domain</code>; a banner with <code>blockedReason</code> when sending is blocked.</li>
+<li><b>Campaigns tab:</b> table — name, status chip, audience summary, recipients, sent, date; "New campaign".</li>
+<li><b>Compose:</b> left — name, audience (pick saved, or the S1 picker inline, showing the live count), subject, preview text, body textarea, merge-field buttons that insert <code>{{first_name|there}}</code> etc.; right — live preview from <code>/render</code> (debounced 400 ms) with From / Reply-To / Subject lines and the footer. Actions: Save draft, Send test (address field prefilled with Reply-To), <b>Review and send…</b></li>
+<li><b>Confirm (modal, after <code>/prepare</code>):</b> "This sends <b>171</b> emails from Henry &lt;…&gt;", subject, audience, the sample of 10, excluded line, a warning when some recipients lack a first name and the body uses <code>{{first_name}}</code> without a fallback, and a text box "Type 171 to send". Send stays disabled until it matches.</li>
+<li><b>Sending:</b> campaign page polls <code>GET /campaigns/:id</code> every 3 s — progress bar sent / total, failed and skipped counts, Cancel button.</li>
+</ul></li>
+
+<li><b>Tests — <code>test/emailSend.test.ts</code>, <code>test/emailRender.test.ts</code>, <code>test/emailUnsubscribe.test.ts</code> (new)</b>
+Fake transport records calls and can be told to fail retryably / non-retryably. Cases below.</li>
+</ol>
+
+<h2>Acceptance</h2>
+<div class="tw"><table>
+<tr><th>Scenario</th><th>Expected</th></tr>
+<tr><td>No <code>DASHBOARD_PASSWORD</code>; POST <code>/prepare</code></td><td>403 "Set DASHBOARD_PASSWORD before sending email."; runner not started</td></tr>
+<tr><td>Settings blank; open Campaigns</td><td>Banner "Fill in the sender settings…", Review-and-send disabled</td></tr>
+<tr><td>From domain not verified in Resend; Prepare</td><td>422 naming the domain and its status</td></tr>
+<tr><td>Body uses <code>{{company}}</code></td><td>Save → 422 "Unknown merge field {{company}}. Use one of: …"</td></tr>
+<tr><td>Send test</td><td>One email to the Reply-To address, subject starts <code>[Test]</code>, real merge values, footer present, test unsubscribe link no-ops</td></tr>
+<tr><td>Prepare 171 → type 170</td><td>409, nothing sent</td></tr>
+<tr><td>Prepare, wait 61 min, Send</td><td>409 "Prepare it again"</td></tr>
+<tr><td>Prepare, then edit the subject</td><td>Campaign back to draft; queued rows gone</td></tr>
+<tr><td>Send 250 recipients</td><td>3 Resend batch calls (100/100/50), keys <code>id:1..3</code>; campaign <code>sent</code>, <code>sent_count = 250</code></td></tr>
+<tr><td>Process restarts after batch 2 was marked <code>sending</code> but before the response</td><td>Batch 2 is re-posted with key <code>id:2</code>; no row ends <code>queued</code>; no recipient appears in two batch keys</td></tr>
+<tr><td>Resend 503 on batch 1</td><td>Rows stay <code>sending</code>; retried with the same key after backoff; succeed</td></tr>
+<tr><td>Resend 422 on batch 1</td><td>100 rows <code>failed</code> with the message; batch 2 still goes</td></tr>
+<tr><td>Recipient unsubscribes from campaign A while campaign B is queued with them</td><td>B's row → <code>skipped</code>/<code>suppressed</code>; not sent</td></tr>
+<tr><td>Mailbox one-click POST to <code>/u/:token</code></td><td>200; <code>contact_suppressions.source = 'email_unsubscribe'</code>; <code>contacts.is_suppressed = 1</code>; <code>email_sends.unsubscribed_at</code> set; repeat POST is 200 and changes nothing</td></tr>
+<tr><td>GET <code>/u/:token</code></td><td>Confirm page only; no suppression written</td></tr>
+<tr><td>Tampered token</td><td>400 page; nothing written</td></tr>
+<tr><td>Every sent email</td><td>Has <code>List-Unsubscribe</code> + <code>List-Unsubscribe-Post</code>, the footer address, and a text part</td></tr>
+<tr><td>Cancel mid-send</td><td>In-flight batch finishes; remaining rows <code>skipped</code>/<code>cancelled</code>; status <code>cancelled</code></td></tr>
+<tr><td>Body contains <code>&lt;script&gt;</code> and <code>[x](javascript:alert(1))</code></td><td>Escaped text; no link</td></tr>
+</table></div>
+
+<h2>Tests (named)</h2>
+<ul>
+<li><code>sending blocked without dashboard password</code> · <code>sending blocked without resend key</code> · <code>prepare blocked when domain unverified</code></li>
+<li><code>settings validate footer address and addresses</code> · <code>unknown merge field rejected</code> · <code>merge fallback used when blank</code> · <code>markdown subset escapes html and drops non-http links</code> · <code>footer and list-unsubscribe headers on every email</code></li>
+<li><code>prepare freezes recipients and snapshots sender</code> · <code>edit after prepare returns to draft</code> · <code>confirm count must match</code> · <code>stale prepare rejected</code></li>
+<li><code>sends in batches of 100 with sequential keys</code> · <code>resumes a sending batch with the same key after restart</code> · <code>retryable error keeps rows sending</code> · <code>non-retryable error fails the batch only</code> · <code>suppressed after prepare is skipped</code> · <code>cancel skips queued rows</code></li>
+<li><code>unsubscribe GET does not write</code> · <code>unsubscribe POST suppresses idempotently</code> · <code>tampered token rejected</code> · <code>test token is a no-op</code></li>
+<li><code>migrations are 1..5 in order</code></li>
+</ul>
+
+<h2>Explicitly NOT in this sprint</h2>
+<ul>
+<li>Webhook events, bounces/complaints into PartnerDex, open/click stats, per-contact history — S3.</li>
+<li>Scheduled sends (Q5), lifecycle triggers (S4), HTML templates, attachments.</li>
+<li>Resending to failed rows (S3 may add "retry failed").</li>
+<li>Any iziGift change.</li>
+</ul>
+
+<h2>Design mockups</h2>
+<h3>Settings tab</h3>
+<div class="mock">
+<div class="mtabs"><span>Audiences</span><span>Campaigns</span><span class="on">Settings</span></div>
+<div class="row"><div><label>From name</label><div class="in">Henry from iziGift</div></div><div><label>From email</label><div class="in">henry@updates.izigift.co</div></div></div>
+<div class="row"><div><label>Reply-To</label><div class="in">henry@izigift.co</div></div><div><label>Sending domain</label><span class="chip done">updates.izigift.co · Verified</span></div></div>
+<div><label>Footer postal address (required by law)</label><div class="ta">[Business name] · [Street] · [City, State ZIP]</div></div>
+<div class="row"><span class="btn p">Save</span><span class="tiny">API key and link secret stay in the server environment — not editable here.</span></div>
+</div>
+
+<h3>Compose</h3>
+<div class="mock">
+<div class="mtabs"><span>Audiences</span><span class="on">Campaigns</span><span>Settings</span></div>
+<div class="split">
+<div>
+<label>Audience</label><div class="in">Paying — owners + staff · <b>171 people</b></div>
+<label style="margin-top:8px">Subject</label><div class="in">{{first_name|Hi}}, 3 gift card ideas for Q4</div>
+<label style="margin-top:8px">Preview text</label><div class="in">Two take ten minutes. One pays for the app.</div>
+<label style="margin-top:8px">Body</label>
+<div class="ta">Hi {{first_name|there}},
+
+Q4 is when gift cards sell. Here are three things {{shop_name}} can set up this week:
+
+**1. A gift card on your homepage.** …
+
+Reply to this email if you want help — I read every one.
+
+— Henry</div>
+<div class="row"><span class="pill">+ first_name</span><span class="pill">+ shop_name</span><span class="pill">+ app_name</span></div>
+<div class="row"><span class="btn">Save draft</span><span class="btn">Send test to henry@izigift.co</span><span class="btn p">Review and send…</span></div>
+</div>
+<div>
+<label>Preview — Aaron Layne · Peachy Sunday</label>
+<div class="envelope"><div class="h">From: Henry from iziGift &lt;henry@updates.izigift.co&gt; · Reply-To: henry@izigift.co</div><div class="h">Subject: <b>Aaron, 3 gift card ideas for Q4</b></div><p>Hi Aaron,</p><p>Q4 is when gift cards sell. Here are three things Peachy Sunday can set up this week:</p><p><b>1. A gift card on your homepage.</b> …</p><p>Reply to this email if you want help — I read every one.</p><p>— Henry</p>
+<div class="foot">[Business name] · [Street] · [City, State ZIP]<br>You get this email because you use iziGift on Peachy Sunday. <u>Unsubscribe</u></div></div>
+</div>
+</div>
+</div>
+
+<h3>Confirm</h3>
+<div class="mock" style="max-width:520px">
+<b style="font-size:17px">Send this email?</b>
+<p>This sends <b>171 emails</b> from Henry from iziGift &lt;henry@updates.izigift.co&gt;.</p>
+<p class="tiny">Subject: "{{first_name|Hi}}, 3 gift card ideas for Q4" · Audience: iziGift · Paying · Owner, Staff<br>14 left out (9 suppressed · 3 store match not confirmed · 2 no status) · 11 duplicates merged</p>
+<div class="warnbox">6 recipients have no first name. They will see the fallback "there".</div>
+<p class="tiny">Sample: aaron@peachysunday.com · addison@nettotableseafoods.com · abby@bondbrandedgear.com · …</p>
+<label>Type 171 to send</label><div class="row"><div class="in" style="min-width:120px">171</div><span class="btn">Cancel</span><span class="btn x">Send 171 emails</span></div>
+</div>
+
+<h3>Sending</h3>
+<div class="mock">
+<b>3 gift card ideas for Q4</b> <span class="chip todo">Sending</span>
+<div style="height:10px;border-radius:5px;background:var(--line);margin:10px 0"><div style="width:58%;height:10px;border-radius:5px;background:var(--brand)"></div></div>
+<p class="tiny">100 of 171 sent · 0 failed · 1 skipped (unsubscribed since prepare) · <u>Cancel</u></p>
+</div>
+<p class="tiny">Placeholder addresses and copy — not real data, not a final sender.</p>
+
+</main></body></html>

@@ -1,0 +1,153 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Email — S3 · Delivery + history</title><style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
+--ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
+--brand:#f0a36b;--brand-soft:#33241a;--ok:#6fd3a0;--ok-soft:#173326;--warn:#f2c14e;--warn-soft:#332a12;--info:#8fb5ff;--info-soft:#1a2540;--code:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+nav.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px}
+nav.top a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px;font-size:13px}
+nav.top a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-top:8px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
+ol.build>li{margin:0 0 14px}ol.build b{display:block}
+.note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
+.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
+.mtile .d{font-size:12px;color:var(--ok)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
+.pill.on{border-color:var(--brand);color:var(--brand)}
+
+.mock .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.mock label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
+.mock .in{border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:var(--bg);font-size:14px;min-width:200px}
+.mock .ta{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg);font-size:14px;white-space:pre-wrap;font-family:inherit}
+.btn{display:inline-block;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.btn.p{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.x{background:#b42318;border-color:#b42318;color:#fff}
+.cb{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;margin:0 6px 6px 0}
+.cb.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600}
+.cb i{width:12px;height:12px;border:1.5px solid currentColor;border-radius:3px;display:inline-block}
+.cb.on i{background:currentColor}
+.mtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-4px 0 12px}
+.mtabs span{padding:6px 12px;font-size:13px;color:var(--muted)}.mtabs span.on{color:var(--brand);border-bottom:2px solid var(--brand);font-weight:600}
+.warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.split{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:14px}
+@media (max-width:720px){.split{grid-template-columns:1fr}}
+.envelope{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg);font-size:14px}
+.envelope .h{font-size:12px;color:var(--muted)}
+.foot{font-size:12px;color:var(--muted);border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
+.tiny{font-size:12px;color:var(--muted)}
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Audiences</a><a href="sprint-2.html">S2 · Compose + send</a><a href="sprint-3.html" class="on">S3 · Delivery + history</a><a href="sprint-4.html">S4 · Lifecycle (open)</a></nav><main>
+<h1>Sprint 3 — Delivery + history</h1>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · branch <code>email/s3-delivery</code> off <code>email-upstream</code> · no migration (columns shipped in 5)</p>
+
+<h2>Why this ships now</h2>
+<p>After S2, PartnerDex knows what it handed to Resend, not what happened next. A hard bounce or a spam complaint is recorded only inside Resend, so the Contacts page still shows that person as sendable, and the next audience still counts them. Henry also cannot answer "did anyone click?" or "what did we last send this merchant?". This sprint brings Resend's delivery events back into <code>email_sends</code> and the suppression store, and shows them per campaign and per person.</p>
+
+<h2>Why this is independently deployable</h2>
+<p>A new public webhook route and new reads. Nothing in S2's send path changes. With <code>RESEND_WEBHOOK_SECRET</code> unset the route answers 503 and the campaign page shows sent counts only — exactly S2. Writes into existing state are limited to <code>suppressContact()</code> with the already-allowed <code>'resend_webhook'</code> source.</p>
+
+<h2>Build</h2>
+<ol class="build">
+<li><b>Config — <code>src/config.ts</code></b>
+<code>email.resendWebhookSecret</code> from <code>RESEND_WEBHOOK_SECRET</code> (the <code>whsec_…</code> value Resend shows when you add the endpoint). Add to <code>.env.example</code> and <code>resetEnvironment()</code>.</li>
+
+<li><b>Signature check — <code>src/email/webhook.ts</code> (new)</b>
+<code>verifyResendSignature(rawBody: Buffer, headers, secret): boolean</code>. Resend signs with Svix: key = base64-decode of the secret after <code>whsec_</code>; signed content = <code>svix-id + "." + svix-timestamp + "." + rawBody</code>; HMAC-SHA256, base64; <code>svix-signature</code> holds space-separated <code>v1,&lt;sig&gt;</code> entries — accept if any matches (<code>timingSafeEqual</code>). Reject when <code>|now − svix-timestamp| &gt; 300 s</code>. No dependency.</li>
+
+<li><b>Event handler — <code>src/email/webhook.ts</code> <code>applyResendEvent(event, db)</code></b>
+Look up <code>email_sends</code> by <code>resend_id = event.data.email_id</code>. Not found → ignore (test sends, or other senders on the same Resend account). Stamps use <code>COALESCE(col, @at)</code> so the first event wins and redelivery is harmless.
+<div class="tw"><table>
+<tr><th>Resend type</th><th>Write</th></tr>
+<tr><td><code>email.delivered</code></td><td><code>delivered_at</code></td></tr>
+<tr><td><code>email.bounced</code></td><td><code>bounced_at</code>; if <code>data.bounce.type</code> is <code>Permanent</code> (hard): <code>suppressContact(email, { source: 'resend_webhook', reason: 'hard bounce' })</code>. Transient/undetermined: stamp only.</td></tr>
+<tr><td><code>email.complained</code></td><td><code>complained_at</code> + <code>suppressContact(…, { source: 'resend_webhook', reason: 'spam complaint' })</code></td></tr>
+<tr><td><code>email.opened</code></td><td><code>opened_at</code> (first)</td></tr>
+<tr><td><code>email.clicked</code></td><td><code>clicked_at</code> (first)</td></tr>
+<tr><td>anything else (<code>email.sent</code>, <code>email.delivery_delayed</code>, …)</td><td>ignored, 200</td></tr>
+</table></div></li>
+
+<li><b>Webhook route — <code>src/server/index.ts</code></b>
+The global <code>app.use(express.json({ limit: '64kb' }))</code> consumes the body, and the signature needs the raw bytes. Register <code>app.post('/api/email/webhooks/resend', express.raw({ type: 'application/json', limit: '256kb' }), resendWebhookHandler)</code> <b>before</b> that <code>express.json</code> line and before <code>requireAuth</code>. Handler: 503 if no secret; 401 if the signature fails; parse JSON; <code>applyResendEvent</code>; 200. Errors after a valid signature still return 200 and log (Resend retries non-2xx, and a poison event must not retry forever). Add the endpoint in Resend → Webhooks with the five event types above.</li>
+
+<li><b>Campaign report — <code>src/email/campaigns.ts</code> + routes</b>
+<code>getCampaign(id)</code> gains <code>stats: { sent, delivered, opened, clicked, bounced, complained, unsubscribed, failed, skipped }</code> (counts of non-null columns / statuses) and <code>rates</code> over <code>delivered</code> (open, click, unsubscribe) and over <code>sent</code> (bounce). New: <code>GET /api/email/campaigns/:id/recipients?filter=all|delivered|opened|clicked|bounced|complained|unsubscribed|failed|skipped&amp;q=&amp;limit=50&amp;offset=0</code> → rows with name, email, store, status, and the event times. <code>POST /api/email/campaigns/:id/retry-failed</code> → failed rows back to <code>queued</code> (new batch keys), campaign back to <code>sending</code>; only for <code>sent|failed</code> campaigns, and only after a type-the-count confirm in the UI.</li>
+
+<li><b>Per-person history — <code>src/email/history.ts</code> + route</b>
+<code>emailHistory(email, db)</code> → <code>[{ campaignId, name, subject, sentAt, status, deliveredAt, openedAt, clickedAt, bouncedAt, complainedAt, unsubscribedAt }]</code>, newest first, joined from <code>email_sends</code> → <code>email_campaigns</code>. Route on <code>emailRouter()</code>: <code>GET /api/email/contacts/:email/history</code> (kept on the email router so the contacts router stays as it is upstream).</li>
+
+<li><b>UI</b>
+<ul>
+<li><b>Campaign page</b> (<code>EmailCampaigns.tsx</code>): stat tiles (Sent, Delivered, Opened ≈, Clicked, Bounced, Unsubscribed), "Opens are approximate" note, filter chips over the recipients table, "Retry N failed".</li>
+<li><b>Contacts page</b> (<code>web/src/components/Contacts.tsx</code>): new "Last email" column (campaign name + a small status) from a batched read: add <code>lastEmailFor(emails[])</code> beside <code>emailHistory()</code> and serve it from <code>GET /api/email/contacts/last?emails=…</code> for the visible page only. Clicking it opens a popover with the full history.</li>
+<li><b>Customer page Contacts tab</b> (<code>web/src/components/CustomerContacts.tsx</code>): same "Last email" column.</li>
+<li>Suppression source labels: <code>resend_webhook</code> shows the reason ("hard bounce" / "spam complaint").</li>
+</ul></li>
+
+<li><b>Tests — <code>test/emailWebhook.test.ts</code>, extend <code>test/emailSend.test.ts</code></b> (cases below). Sign fixture payloads with a test secret in the test itself.</li>
+</ol>
+
+<h2>Acceptance</h2>
+<div class="tw"><table>
+<tr><th>Scenario</th><th>Expected</th></tr>
+<tr><td>No <code>RESEND_WEBHOOK_SECRET</code>; Resend posts an event</td><td>503; nothing written</td></tr>
+<tr><td>Bad or missing signature / timestamp 10 min old</td><td>401; nothing written</td></tr>
+<tr><td><code>email.delivered</code> for a known <code>resend_id</code></td><td><code>delivered_at</code> set; posting it again leaves the first time</td></tr>
+<tr><td><code>email.bounced</code>, type Permanent</td><td><code>bounced_at</code> set; contact suppressed, source <code>resend_webhook</code>, reason "hard bounce"; next S1 preview counts them as suppressed</td></tr>
+<tr><td><code>email.bounced</code>, type Transient</td><td><code>bounced_at</code> set; not suppressed</td></tr>
+<tr><td><code>email.complained</code></td><td>Stamp + suppressed, reason "spam complaint"</td></tr>
+<tr><td>Event for an unknown <code>email_id</code> (a test send)</td><td>200; nothing written</td></tr>
+<tr><td>Valid signature, handler throws</td><td>200 + log line (no retry storm)</td></tr>
+<tr><td>Campaign with 171 sent, 165 delivered, 40 clicked</td><td>Report shows click rate 24.2% (over delivered)</td></tr>
+<tr><td>Retry failed on a campaign with 3 failed</td><td>Requires typing 3; those rows re-queued with new batch keys; others untouched</td></tr>
+<tr><td>Contact who got 2 campaigns</td><td>History lists both, newest first; Contacts row shows the newest</td></tr>
+</table></div>
+
+<h2>Tests (named)</h2>
+<ul>
+<li><code>webhook disabled without secret</code> · <code>rejects bad signature</code> · <code>rejects old timestamp</code> · <code>accepts any matching v1 signature</code></li>
+<li><code>delivered stamps once</code> · <code>hard bounce suppresses</code> · <code>soft bounce does not suppress</code> · <code>complaint suppresses</code> · <code>unknown email id ignored</code> · <code>handler error still returns 200</code></li>
+<li><code>campaign stats and rates</code> · <code>recipients filter by event</code> · <code>retry failed requeues only failed rows</code> · <code>history newest first</code> · <code>last email for a page of contacts</code></li>
+</ul>
+
+<h2>Explicitly NOT in this sprint</h2>
+<ul>
+<li>Per-link click breakdown, heatmaps, A/B tests.</li>
+<li>Pulling events by polling the Resend API (webhook only).</li>
+<li>Lifecycle / automation — S4.</li>
+<li>Unsuppressing a bounced address automatically — a human does it on the Contacts page.</li>
+</ul>
+
+<h2>Design mockup — campaign report</h2>
+<div class="mock">
+<div class="mtabs"><span>Audiences</span><span class="on">Campaigns</span><span>Settings</span></div>
+<b style="font-size:17px">3 gift card ideas for Q4</b> <span class="chip done">Sent</span> <span class="tiny">· Oct 14, 9:02 AM · iziGift · Paying · Owner, Staff</span>
+<div class="mgrid" style="margin-top:10px">
+<div class="mtile"><div class="l">Sent</div><div class="v">171</div></div>
+<div class="mtile"><div class="l">Delivered</div><div class="v">165</div><div class="tiny">96.5%</div></div>
+<div class="mtile"><div class="l">Opened ≈</div><div class="v">88</div><div class="tiny">53% · approximate</div></div>
+<div class="mtile"><div class="l">Clicked</div><div class="v">40</div><div class="tiny">24.2%</div></div>
+<div class="mtile"><div class="l">Bounced</div><div class="v">6</div><div class="tiny">4 hard → suppressed</div></div>
+<div class="mtile"><div class="l">Unsubscribed</div><div class="v">3</div><div class="tiny">1.8%</div></div>
+</div>
+<div class="row"><span class="pill on">All</span><span class="pill">Clicked</span><span class="pill">Opened</span><span class="pill">Bounced</span><span class="pill">Unsubscribed</span><span class="pill">Failed</span></div>
+<div class="tw"><table><tr><th>Name</th><th>Store</th><th>Status</th><th>Clicked</th></tr>
+<tr><td>Aaron Layne</td><td>Peachy Sunday</td><td>Delivered · opened</td><td>Oct 14, 9:40 AM</td></tr>
+<tr><td>Addison Arendt</td><td>Net To Table Seafoods</td><td>Delivered</td><td>—</td></tr>
+<tr><td>Abby Bond</td><td>Plunkett's</td><td>Bounced (hard) · suppressed</td><td>—</td></tr></table></div>
+<p class="tiny">Illustrative numbers — not real data.</p>
+</div>
+
+</main></body></html>

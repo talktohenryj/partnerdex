@@ -1,0 +1,182 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Email — Overview</title><style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
+--ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
+--brand:#f0a36b;--brand-soft:#33241a;--ok:#6fd3a0;--ok-soft:#173326;--warn:#f2c14e;--warn-soft:#332a12;--info:#8fb5ff;--info-soft:#1a2540;--code:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+nav.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px}
+nav.top a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px;font-size:13px}
+nav.top a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-top:8px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
+ol.build>li{margin:0 0 14px}ol.build b{display:block}
+.note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
+.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
+.mtile .d{font-size:12px;color:var(--ok)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
+.pill.on{border-color:var(--brand);color:var(--brand)}
+
+.mock .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.mock label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
+.mock .in{border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:var(--bg);font-size:14px;min-width:200px}
+.mock .ta{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg);font-size:14px;white-space:pre-wrap;font-family:inherit}
+.btn{display:inline-block;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.btn.p{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.x{background:#b42318;border-color:#b42318;color:#fff}
+.cb{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;margin:0 6px 6px 0}
+.cb.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600}
+.cb i{width:12px;height:12px;border:1.5px solid currentColor;border-radius:3px;display:inline-block}
+.cb.on i{background:currentColor}
+.mtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-4px 0 12px}
+.mtabs span{padding:6px 12px;font-size:13px;color:var(--muted)}.mtabs span.on{color:var(--brand);border-bottom:2px solid var(--brand);font-weight:600}
+.warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.split{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:14px}
+@media (max-width:720px){.split{grid-template-columns:1fr}}
+.envelope{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg);font-size:14px}
+.envelope .h{font-size:12px;color:var(--muted)}
+.foot{font-size:12px;color:var(--muted);border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
+.tiny{font-size:12px;color:var(--muted)}
+</style></head><body><nav class="top"><a href="index.html" class="on">Overview</a><a href="sprint-1.html">S1 · Audiences</a><a href="sprint-2.html">S2 · Compose + send</a><a href="sprint-3.html">S3 · Delivery + history</a><a href="sprint-4.html">S4 · Lifecycle (open)</a></nav><main>
+<h1>Email</h1>
+<p class="sub">Send email to the people in the Contacts store, split by store status and role. Planned 2026-10-09 with Henry. Built on the <code>contacts-upstream</code> line so it can go upstream after contacts does.</p>
+
+<div class="card">
+<b>The one-paragraph version.</b> PartnerDex already holds a few hundred merchant contacts (Mantle import + live iziGift capture), each linked to a store, a role, and that store's subscription state. There is no way to message them. This feature adds an <b>Email</b> section: build an <b>audience</b> (one app × store statuses × roles), write a <b>plain-text founder email</b>, send yourself a test, confirm by typing the recipient count, and PartnerDex sends it through <b>Resend</b> with a working unsubscribe link, a postal footer, and per-recipient history. Automated lifecycle email is v2/v3 and only scoped as open questions here.
+</div>
+
+<h2>Decisions (Henry, 2026-10-09)</h2>
+<div class="tw"><table>
+<tr><th>Question</th><th>Decision</th></tr>
+<tr><td>Provider</td><td><b>Resend.</b> Already the newsletter choice (2026-07-18) and already used by iziGift (<code>app/Services/ResendService.php</code>). API key stays in env.</td></tr>
+<tr><td>v1 email kinds</td><td><b>One-off broadcasts only.</b> Lifecycle (trial / inactive / win-back / new login) is v2 or v3 → <a href="sprint-4.html">S4, open questions only</a>.</td></tr>
+<tr><td>How audiences split</td><td><b>Store status</b> (per app) <b>+ which roles to include</b> (owner / staff / collaborator). Nothing else in v1 — no MRR range, no plan, no tags, no hand-picking.</td></tr>
+<tr><td>Who is eligible</td><td>All roles; the role checkboxes decide per email. <b>Unlinked contacts are always left out</b> (no store → no status).</td></tr>
+<tr><td>Format</td><td><b>Plain founder text</b> (light Markdown: paragraphs, links, bold/italic). No HTML template designer.</td></tr>
+<tr><td>Sender details</td><td><b>From name, From address, Reply-To, and footer postal address are fields in the UI</b> (Settings tab), not env vars. Henry gives the From address later; Reply-To will be Henry's iziGift address.</td></tr>
+<tr><td>Send safety</td><td><b>Confirm step:</b> a screen with the frozen recipient count and a sample; Henry types the count to enable Send. No second password.</td></tr>
+<tr><td>Where it lives</td><td>This folder (<code>partnerdex/roadmap/email/</code>, fork <code>main</code>). Code builds on a branch off <code>contacts-upstream</code> — see <a href="#branching">Branching</a>.</td></tr>
+</table></div>
+
+<h2>Status board</h2>
+<div class="tw"><table>
+<tr><th>Sprint</th><th>What ships</th><th>Migration</th><th>Status</th></tr>
+<tr><td><a href="sprint-1.html">S1 · Audiences</a></td><td>Email page + Audiences tab: pick app, statuses, roles → live count, breakdown, sample; save named audiences; CSV export</td><td>4 (<code>email_audiences</code>)</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-2.html">S2 · Compose + send</a></td><td>Settings tab (sender fields), Campaigns tab, compose with merge fields, test send, prepare → type-to-confirm → send via Resend batch, resumable runner, one-click unsubscribe, footer</td><td>5 (<code>email_settings</code>, <code>email_campaigns</code>, <code>email_sends</code>)</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-3.html">S3 · Delivery + history</a></td><td>Resend webhook (signed) → delivered / bounced / complained / opened / clicked; bounces + complaints suppress; campaign report; "Emails" on the contact and customer pages</td><td>none (columns ship in 5)</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-4.html">S4 · Lifecycle</a></td><td>Automated triggered email — open questions only (v2/v3)</td><td>—</td><td><span class="chip open">Not designed</span></td></tr>
+</table></div>
+
+<h2>Dependency graph</h2>
+<pre>contacts store (migration 3, shipped) ──► S1 audiences ──► S2 compose + send ──► S3 delivery + history ──► S4 lifecycle (open)
+                                                   │
+                                     Resend domain verified + From address (Henry) — gates the first REAL send, not the build</pre>
+
+<h2>The problem today</h2>
+<ul>
+<li><b>The list exists; the send does not.</b> <code>contacts</code> / <code>contact_shops</code> / <code>contact_suppressions</code> (migration 3, <code>src/db/migrate.ts</code>) hold the people. The Contacts page (<code>src/contacts/list.ts</code>, <code>web/src/components/Contacts.tsx</code>) can search and suppress them. Nothing in <code>src/</code> sends an email — no Resend client, no transport, no template, no unsubscribe route.</li>
+<li><b>No way to split by what matters.</b> The Contacts filters are data-hygiene filters (<code>ContactLinkedFilter = 'all' | 'unlinked' | 'ambiguous' | 'suppressed'</code>). The question Henry needs answered — "every owner and staff member of a <i>paying</i> iziGift store" — needs the per-store status that only <code>src/customers/index.ts</code> computes (<code>statusOf()</code> → <code>'paying' | 'trialing' | 'installed' | 'churned' | 'gone'</code>), and it is private to the Customers list today.</li>
+<li><b>The suppression store has no inbound path from email.</b> <code>suppressContact()</code> accepts <code>'resend_webhook' | 'manual' | 'csv_import'</code>, but no route produces <code>resend_webhook</code>, and an unsubscribe link has nowhere to land.</li>
+<li><b>The reason it matters now.</b> ~158 paying iziGift stores, fewer than 50 active (Henry, 2026-10-01). The merchant newsletter has been parked since July for want of a send tool. A broadcast to "paying but not using it" is the cheapest churn defense available.</li>
+</ul>
+
+<h2>What exists today vs the gap</h2>
+<div class="tw"><table>
+<tr><th>Reuse (do not rebuild)</th><th>Where</th><th>Used by</th></tr>
+<tr><td>Contacts tables + suppression mirror</td><td><code>src/db/migrate.ts</code> migration 3; <code>contacts.is_suppressed</code>, <code>contact_suppressions</code></td><td>S1, S2, S3</td></tr>
+<tr><td>Email-global suppress / unsuppress</td><td><code>suppressContact()</code>, <code>unsuppressContact()</code>, <code>normalizeEmail()</code> in <code>src/contacts/upsert.ts</code></td><td>S2 (unsubscribe), S3 (bounce/complaint)</td></tr>
+<tr><td>Per-store status + live MRR</td><td><code>summarySql()</code> + <code>statusOf()</code> in <code>src/customers/index.ts</code> (private today → exported helper in S1)</td><td>S1</td></tr>
+<tr><td>Primary-shop rule (owner first, then highest MRR)</td><td><code>primaryShop</code> in <code>src/contacts/list.ts</code></td><td>S1 (dedupe)</td></tr>
+<tr><td>App scope</td><td><code>resolveScopedAppIds()</code> in <code>src/sync/index.ts</code>, <code>assertAppInScope()</code> in <code>src/contacts/upsert.ts</code></td><td>S1</td></tr>
+<tr><td>Dashboard auth gate</td><td><code>requireAuth</code> in <code>src/server/auth.ts</code>, mounted at <code>app.use('/api', requireAuth)</code> in <code>src/server/index.ts</code></td><td>S1, S2</td></tr>
+<tr><td>Public-before-gate mounting pattern</td><td><code>app.use('/api/contacts', contactsRouter())</code> ahead of the gate</td><td>S2 (unsubscribe), S3 (webhook)</td></tr>
+<tr><td>Chained-timer background loop</td><td><code>src/sync/scheduler.ts</code> (no overlap, backoff), started from <code>src/server/index.ts</code></td><td>S2 (send runner)</td></tr>
+<tr><td>Error envelope</td><td><code>sendError()</code> in <code>src/server/errors.ts</code></td><td>all</td></tr>
+<tr><td>Page registry + nav</td><td><code>PageSpec</code> / <code>kind</code> in <code>web/src/pages.ts</code>; kind switch in <code>web/src/App.tsx</code></td><td>S1</td></tr>
+<tr><td>Customer page Contacts tab</td><td><code>web/src/components/CustomerContacts.tsx</code></td><td>S3</td></tr>
+</table></div>
+
+<h2>What / Where / Sprint</h2>
+<div class="tw"><table>
+<tr><th>What</th><th>Where</th><th>Sprint</th></tr>
+<tr><td>Audience definition</td><td><code>{ appId, statuses: CustomerStatus[], roles: ContactRole[] }</code> — <code>src/email/audience.ts</code></td><td>S1</td></tr>
+<tr><td>Saved audiences</td><td><code>email_audiences(id, name, definition JSON, created_at, updated_at)</code></td><td>S1</td></tr>
+<tr><td>Resolver</td><td><code>resolveAudience(def, db) → { recipients, excluded }</code></td><td>S1</td></tr>
+<tr><td>Status helper</td><td><code>shopStatuses(db, appId) → Map&lt;shopId, { status, mrr, name }&gt;</code> exported from <code>src/customers/index.ts</code></td><td>S1</td></tr>
+<tr><td>Audience API</td><td><code>POST /api/email/audiences/preview</code>; <code>GET|POST /api/email/audiences</code>; <code>PUT|DELETE /api/email/audiences/:id</code>; <code>GET /api/email/audiences/export.csv?…</code></td><td>S1</td></tr>
+<tr><td>Sender settings (UI-entered)</td><td><code>email_settings(id=1, from_name, from_email, reply_to, footer_address, updated_at)</code>; <code>GET|PUT /api/email/settings</code>; <code>GET /api/email/settings/domain</code></td><td>S2</td></tr>
+<tr><td>Campaigns</td><td><code>email_campaigns(id, name, subject, preview_text, body, audience JSON, audience_id, status, sender snapshot, counts, timestamps)</code></td><td>S2</td></tr>
+<tr><td>Per-recipient sends</td><td><code>email_sends(campaign_id, email, shop_id, merge JSON, status, resend_id, error, sent_at, delivered_at, opened_at, clicked_at, bounced_at, complained_at, unsubscribed_at)</code></td><td>S2 (S3 fills the event columns)</td></tr>
+<tr><td>Campaign API</td><td><code>GET|POST /api/email/campaigns</code>; <code>GET|PUT|DELETE /api/email/campaigns/:id</code>; <code>POST …/:id/test</code>; <code>POST …/:id/prepare</code>; <code>POST …/:id/send</code>; <code>POST …/:id/cancel</code></td><td>S2</td></tr>
+<tr><td>Transport</td><td><code>src/email/resend.ts</code> — <code>sendBatch()</code> (<code>POST https://api.resend.com/emails/batch</code>, <code>Idempotency-Key</code>), <code>sendOne()</code>, <code>listDomains()</code></td><td>S2</td></tr>
+<tr><td>Send runner</td><td><code>src/email/runner.ts</code> — chained timer, 100 recipients per batch, resumes after restart</td><td>S2</td></tr>
+<tr><td>Unsubscribe</td><td><code>GET /u/:token</code> (confirm page), <code>POST /u/:token</code> (RFC 8058 one-click) — public; HMAC token</td><td>S2</td></tr>
+<tr><td>Env</td><td><code>RESEND_API_KEY</code>, <code>PUBLIC_BASE_URL</code>, <code>EMAIL_LINK_SECRET</code> (S2); <code>RESEND_WEBHOOK_SECRET</code> (S3)</td><td>S2, S3</td></tr>
+<tr><td>Delivery events</td><td><code>POST /api/email/webhooks/resend</code> — public, Svix-signed; <code>email.delivered|bounced|complained|opened|clicked</code></td><td>S3</td></tr>
+<tr><td>History reads</td><td><code>GET /api/email/campaigns/:id/recipients</code>; <code>GET /api/email/contacts/:email/history</code>; <code>GET /api/email/contacts/last?emails=…</code></td><td>S3</td></tr>
+</table></div>
+
+<h2>The send, end to end</h2>
+<pre>Audiences tab ── definition {appId, statuses, roles} ──► resolveAudience() ──► count + sample (live)
+      │
+Campaigns tab ── subject + body (+ {{first_name}} {{shop_name}}) ──► Test send to one address
+      │
+  Prepare  ──► recipients frozen into email_sends (status=queued), suppressed re-checked
+      │
+  Confirm  ──► Henry types the frozen count ──► status=sending
+      │
+  Runner   ──► 100 at a time → Resend /emails/batch (Idempotency-Key per batch) → status=sent + resend_id
+      │
+  Recipient ── List-Unsubscribe one-click / footer link ──► /u/:token ──► suppressContact(source='email_unsubscribe')
+      │
+  Resend webhook (S3) ──► delivered / opened / clicked stamps; bounced(hard) + complained ──► suppressContact(source='resend_webhook')</pre>
+
+<h2>Why each sprint ships alone</h2>
+<p><b>S1 alone.</b> One migration that only creates <code>email_audiences</code>, one read-mostly router behind the dashboard gate, one new page. No existing query changes behaviour: <code>shopStatuses()</code> is extracted from the code the Customers list already runs, and the Customers list keeps calling the same SQL (its tests prove it). Value on its own: Henry can answer "who exactly is a paying iziGift owner or staff member?" with a count and a list, and export the CSV into any tool he already has — the newsletter is unblocked even if S2 slips.</p>
+<p><b>S2 alone (after S1).</b> Adds tables and routes; touches no existing write path except widening the <code>suppressContact()</code> source union by one value. With <code>RESEND_API_KEY</code> unset the Send and Test buttons are disabled with a reason and the runner never starts — the app behaves exactly as after S1. Resend already refuses to deliver to addresses on its own bounce/complaint suppression list, so sending before S3 does not hammer bad addresses; S3 only mirrors those events into PartnerDex so the Contacts page and future audiences see them.</p>
+<p><b>S3 alone (after S2).</b> A new public webhook route plus reads. With <code>RESEND_WEBHOOK_SECRET</code> unset the route answers 503 and campaigns simply show "sent" without delivery detail — S2 is unchanged.</p>
+
+<h2 id="branching">Branching and upstream</h2>
+<div class="note">Henry, 2026-10-09: "For now it will just be in my fork but eventually I will likely upstream it. We should build this as a branch off of contacts upstream."</div>
+<ol>
+<li>Create <code>email-upstream</code> from <code>origin/contacts-upstream</code> (= upstream <code>main</code> + the single contacts commit). Each sprint is a branch off <code>email-upstream</code> and merges back into it.</li>
+<li>To run it in production, merge <code>email-upstream</code> into the fork's <code>main</code> and <code>fly deploy</code>. Never merge fork <code>main</code> back into <code>email-upstream</code> — that drags <code>CLAUDE.md</code>, <code>roadmap/</code>, and fork-only commits into the future upstream diff (fork <code>CLAUDE.md</code> branching rule).</li>
+<li>Upstream PR opens only after the contacts PR merges upstream; rebase <code>email-upstream</code> onto the new <code>upstream/main</code> then.</li>
+<li>Keep it upstream-shaped: nothing iziGift-specific in code (no "iziGift" strings, no Henry defaults); sender identity lives in the UI-entered <code>email_settings</code> row; Resend sits behind a small <code>EmailTransport</code> interface so another provider can be added upstream without touching the runner.</li>
+</ol>
+
+<h2>Open questions</h2>
+<div class="tw"><table>
+<tr><th>#</th><th>Question</th><th>Blocks</th><th>Recommendation</th></tr>
+<tr><td>Q1</td><td><b>Migration numbers.</b> Usage Metrics (fork, not started) has planned 4 and 5. Email is on the upstream-bound line and also wants 4 and 5.</td><td>S1 build</td><td>Email takes <b>4</b> (S1) and <b>5</b> (S2) because it is the one going upstream next after contacts; renumber Usage Metrics to 6/7 in its roadmap before either starts. Agree with Aditya while the contacts PR is open (fork <code>CLAUDE.md</code>). <span class="chip open">Henry to confirm</span></td></tr>
+<tr><td>Q2</td><td><b>From address + domain.</b> Henry supplies later. Must be on a Resend-verified domain (SPF/DKIM).</td><td>First real send only — not the build</td><td>A subdomain (e.g. <code>updates.izigift.co</code>) keeps broadcast reputation away from gift-card delivery mail on the root domain. Settings tab shows verification state (S2).</td></tr>
+<tr><td>Q3</td><td><b>Ambiguous matches.</b> A <code>contact_shops</code> row with <code>match_method = 'ambiguous'</code> is a best guess.</td><td>S1 resolver</td><td>Exclude, and show the count ("4 left out: store match not confirmed") with a link to the Contacts Ambiguous filter. Default in the spec.</td></tr>
+<tr><td>Q4</td><td><b>Open tracking.</b> Opens need an HTML pixel and are unreliable (Apple Mail privacy). Clicks are reliable.</td><td>S3 only</td><td>Send <code>text</code> + minimal <code>html</code>; turn on Resend open + click tracking at the domain level; label opens "approximate" in the report.</td></tr>
+<tr><td>Q5</td><td><b>Scheduled send</b> ("send Tuesday 9am ET").</td><td>Nothing — not in v1</td><td>Out of v1. The runner already polls; a <code>scheduled_at</code> column can be added later with one migration.</td></tr>
+</table></div>
+
+<h2>Deliberately out of scope (v1)</h2>
+<ul>
+<li>Lifecycle / automated / triggered email (→ <a href="sprint-4.html">S4</a>, v2/v3).</li>
+<li>Splits beyond store status + role: MRR range, plan, install date, login recency, usage metrics, tags, hand-picked lists.</li>
+<li>HTML templates, images, a WYSIWYG editor, A/B subjects.</li>
+<li>Multi-app audiences in one send (one app per audience; status is per app).</li>
+<li>Unlinked contacts — never eligible.</li>
+<li>Reply handling inside PartnerDex — replies go to the Reply-To inbox.</li>
+<li>Scheduled sends (Q5).</li>
+<li>Sending from iziGift. iziGift stays a contact producer; it gets no email code from this.</li>
+</ul>
+
+</main></body></html>

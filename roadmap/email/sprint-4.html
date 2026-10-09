@@ -1,0 +1,109 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Email — S4 · Lifecycle (open)</title><style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
+--ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
+--brand:#f0a36b;--brand-soft:#33241a;--ok:#6fd3a0;--ok-soft:#173326;--warn:#f2c14e;--warn-soft:#332a12;--info:#8fb5ff;--info-soft:#1a2540;--code:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+nav.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;padding:8px 16px}
+nav.top a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px;font-size:13px}
+nav.top a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-top:8px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
+ol.build>li{margin:0 0 14px}ol.build b{display:block}
+.note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
+.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
+.mtile .d{font-size:12px;color:var(--ok)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
+.pill.on{border-color:var(--brand);color:var(--brand)}
+
+.mock .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.mock label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
+.mock .in{border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:var(--bg);font-size:14px;min-width:200px}
+.mock .ta{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg);font-size:14px;white-space:pre-wrap;font-family:inherit}
+.btn{display:inline-block;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.btn.p{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.x{background:#b42318;border-color:#b42318;color:#fff}
+.cb{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;margin:0 6px 6px 0}
+.cb.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600}
+.cb i{width:12px;height:12px;border:1.5px solid currentColor;border-radius:3px;display:inline-block}
+.cb.on i{background:currentColor}
+.mtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-4px 0 12px}
+.mtabs span{padding:6px 12px;font-size:13px;color:var(--muted)}.mtabs span.on{color:var(--brand);border-bottom:2px solid var(--brand);font-weight:600}
+.warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.split{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:14px}
+@media (max-width:720px){.split{grid-template-columns:1fr}}
+.envelope{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg);font-size:14px}
+.envelope .h{font-size:12px;color:var(--muted)}
+.foot{font-size:12px;color:var(--muted);border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
+.tiny{font-size:12px;color:var(--muted)}
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Audiences</a><a href="sprint-2.html">S2 · Compose + send</a><a href="sprint-3.html">S3 · Delivery + history</a><a href="sprint-4.html" class="on">S4 · Lifecycle (open)</a></nav><main>
+<h1>Sprint 4 — Lifecycle email (v2/v3)</h1>
+<p class="sub"><span class="chip open">Not designed</span> · repo: partnerdex · open questions only</p>
+
+<div class="note">Henry, 2026-10-09: "No lifecycle for v1. That can be a v2 or 3." This page is <b>not</b> a Build list. It holds the questions that must be answered before anyone builds automated email, so they are not lost and not invented later.</div>
+
+<h2>What "lifecycle" means here</h2>
+<p>An email that sends itself to one person when a condition becomes true for them — not a broadcast Henry presses Send on. Candidate triggers raised on 2026-10-09:</p>
+<div class="tw"><table>
+<tr><th>Trigger</th><th>Data PartnerDex has today</th><th>Gap</th></tr>
+<tr><td>Trial started / trial ending</td><td><code>subscriptions.trial_status</code>, <code>trial_started_at</code>, <code>trial_ends_at</code></td><td>Trial end date per (app, shop) must be reliable to the day</td></tr>
+<tr><td>Paying but inactive (no login in N days)</td><td><code>contact_shops.last_seen_at</code> (dashboard logins via iziGift capture)</td><td>"Login" is not "using the app". Usage Metrics (fork roadmap) would give a better signal</td></tr>
+<tr><td>Uninstalled / churned (win-back)</td><td><code>customer_events</code> uninstall / subscription-cancel events, already used by Slack notifications</td><td>Timing (same day feels like spam; 14 days?) and whether to email at all after an uninstall</td></tr>
+<tr><td>New person logs in for the first time</td><td><code>contacts.created_at</code> from live capture</td><td>Mantle-imported people have no real first-seen date</td></tr>
+</table></div>
+
+<h2>Open questions (each changes schema or API shape)</h2>
+<ol>
+<li><b>Trigger source.</b> Hang triggers off the existing seams — the sync's <code>onSyncComplete</code> listener and <code>customer_events</code> (the way <code>src/notifications/dispatch.ts</code> already finds new events for Slack) — or evaluate conditions on a clock ("every hour, who is now 5 days into a trial")? Event-driven reuses notifications; clock-driven is the only way to do "no login for 30 days".</li>
+<li><b>One send per person per trigger, ever?</b> Needs an <code>email_automation_sends(automation_id, email, shop_id, sent_at)</code> uniqueness rule. What resets it — a reinstall, a new trial?</li>
+<li><b>Frequency cap across everything.</b> If a person qualifies for a broadcast and two automations in one week, who wins? A global "max N emails per person per 7 days" needs a check inside the S2 runner too.</li>
+<li><b>Sequences or single emails?</b> "Day 1, day 3, day 6" is a sequence with exit conditions (they paid → stop). That is a much bigger model than single triggered emails. Recommendation: v2 = single emails only.</li>
+<li><b>Quiet hours / time zone.</b> Shops have no reliable time zone in PartnerDex. Send in <code>REPORTING_TIMEZONE</code> business hours?</li>
+<li><b>Consent for automated email to staff and collaborators.</b> Broadcasts let Henry choose roles each time. An automation runs unattended — should it default to owners only?</li>
+<li><b>Kill switch.</b> One toggle that pauses all automations (and is it per automation as well)?</li>
+<li><b>Upstream fit.</b> Is automation generic enough to go upstream, or fork-only?</li>
+</ol>
+
+<h2>What v1 already gives v2</h2>
+<ul>
+<li>The audience resolver (S1) — an automation's "who" is the same definition plus a trigger.</li>
+<li>The renderer, transport, unsubscribe, and runner (S2) — an automation enqueues <code>email_sends</code> rows under a campaign-like parent and the same runner sends them.</li>
+<li>Delivery events and suppression (S3) — unchanged.</li>
+</ul>
+
+<h2>Final vision</h2>
+<p>After v1 (S1–S3) and a v2 lifecycle layer: one Email section in PartnerDex where every message to a merchant — broadcast or automatic — is chosen by store status and role, sent from Henry's own address, honours every unsubscribe and bounce in one suppression store, and shows up on that person's contact row next to their store's MRR.</p>
+<div class="mock">
+<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><div><b style="font-size:18px">Email</b><div class="tiny">Message the people who use your apps.</div></div><span class="pill">App: iziGift</span></div>
+<div class="mtabs" style="margin-top:12px"><span>Audiences</span><span class="on">Campaigns</span><span>Automations <span class="chip open">v2</span></span><span>Settings</span></div>
+<div class="tw"><table><tr><th>Campaign</th><th>Audience</th><th>Status</th><th>Sent</th><th>Clicked</th></tr>
+<tr><td><b>3 gift card ideas for Q4</b></td><td>Paying · Owner, Staff</td><td><span class="chip done">Sent</span></td><td>171</td><td>24%</td></tr>
+<tr><td><b>Quick question about how you use iziGift</b></td><td>Paying · Owner</td><td><span class="chip todo">Sending</span></td><td>62 / 140</td><td>—</td></tr>
+<tr><td><b>We fixed the thing you asked about</b></td><td>Churned · Owner</td><td><span class="chip open">Draft</span></td><td>—</td><td>—</td></tr>
+</table></div>
+<div class="split" style="margin-top:12px">
+<div class="card" style="margin:0"><b>Automations (v2)</b>
+<div class="tiny" style="margin-top:6px">Trial day 5 — "Your trial ends soon" · <span class="chip done">On</span> · 12 sent this month</div>
+<div class="tiny">Paying, no login 30 days — "Need a hand?" · <span class="chip open">Paused</span></div>
+<div class="tiny">Churned + 14 days — win-back · <span class="chip open">Off</span></div></div>
+<div class="card" style="margin:0"><b>Aaron Layne</b> <span class="tiny">· Peachy Sunday · Owner · $39 MRR</span>
+<div class="tiny" style="margin-top:6px">Oct 14 — 3 gift card ideas for Q4 · delivered · clicked</div>
+<div class="tiny">Sep 2 — Trial day 5 (automation) · delivered</div></div>
+</div>
+<p class="tiny">Illustrative — the Automations tab is v2 and not designed.</p>
+</div>
+
+</main></body></html>
