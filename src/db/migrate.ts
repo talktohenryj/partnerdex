@@ -153,6 +153,66 @@ export const MIGRATIONS: Migration[] = [
       db.exec('DELETE FROM metric_cache');
     },
   },
+
+  /*
+   * A trial conversion's event id stopped carrying its date.
+   *
+   * The date is provisional — the billing date until the first sale settles,
+   * then the sale's — so the old id `app|shop|derived:trial_converted|<at>|charge`
+   * changed underneath an event that had already been announced, and the
+   * delivery ledger, keyed on the id, could not recognise it. The compiler now
+   * emits `app|shop|derived:trial_converted|charge`.
+   *
+   * Every conversion a channel was already told about has to be recorded under
+   * the new id too, or the first dispatch after this release announces it again
+   * — and with `NOTIFICATION_MAX_AGE_HOURS=0` that would be every conversion
+   * since the topic was switched on. The dated rows are kept rather than
+   * rewritten: `customer_events` still holds dated ids until the next sync
+   * rebuilds it, and a manual dispatch before then must find them delivered.
+   * A channel told twice already has two dated rows for one charge; both map
+   * to the same new id and the second is ignored.
+   *
+   * The id format is spelled out here rather than imported, so this migration
+   * keeps meaning what it meant if the compiler's format moves again.
+   */
+  {
+    version: 3,
+    up: (db) => {
+      const rows = db
+        .prepare(
+          `SELECT channel_id, event_id, delivered_at, ok, error
+             FROM notification_deliveries
+            WHERE event_id LIKE '%|derived:trial_converted|%'
+            ORDER BY delivered_at`,
+        )
+        .all() as Array<{
+        channel_id: string;
+        event_id: string;
+        delivered_at: string;
+        ok: number;
+        error: string | null;
+      }>;
+
+      const insert = db.prepare(
+        `INSERT INTO notification_deliveries (channel_id, event_id, delivered_at, ok, error)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(channel_id, event_id) DO NOTHING`,
+      );
+      for (const row of rows) {
+        const parts = row.event_id.split('|');
+        // Already undated: nothing to carry.
+        if (parts.length !== 5 || parts[2] !== 'derived:trial_converted') continue;
+        const [appId, shopId, kind, , chargeId] = parts;
+        insert.run(
+          row.channel_id,
+          `${appId}|${shopId}|${kind}|${chargeId}`,
+          row.delivered_at,
+          row.ok,
+          row.error,
+        );
+      }
+    },
+  },
 ];
 
 export function readUserVersion(db: Db): number {

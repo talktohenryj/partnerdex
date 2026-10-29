@@ -191,6 +191,20 @@ function derivedEventId(sub: SubRow, kind: string, at: string): string {
   return `${sub.app_id}|${sub.shop_id}|${kind}|${at}|${sub.charge_id}`;
 }
 
+/**
+ * A conversion is named by its charge alone, because its date is provisional.
+ *
+ * A charge converts at most once, but *when* is a best estimate until the first
+ * sale settles: before then it is the billing date, and once the sale lands in
+ * a payout batch it is the sale's date, often a fortnight later. Stamping that
+ * date into the id made every correction a new event, and the notifier — whose
+ * ledger is keyed on the id — announced the same conversion twice. Migration 3
+ * carries conversions already announced under the dated id across to this one.
+ */
+function conversionEventId(sub: SubRow): string {
+  return `${sub.app_id}|${sub.shop_id}|derived:trial_converted|${sub.charge_id}`;
+}
+
 /** Unrecognized raw types are collected and reported, never thrown on. */
 const unknownTypes = new Set<string>();
 
@@ -290,7 +304,7 @@ function foldInstall(items: TimelineItem[], out: CleanEvent[]): void {
         const credited = currentState === 'subscription_frozen' ? 0 : contributionAt(sub, item.at);
         out.push({
           ...base,
-          event_id: derivedEventId(sub, item.kind, item.at),
+          event_id: conversionEventId(sub),
           type: 'trial_converted',
           net_change: applies ? credited - currentAmount : 0,
         });

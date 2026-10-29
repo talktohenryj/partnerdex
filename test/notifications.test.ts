@@ -13,7 +13,7 @@ import {
   webhookHint,
 } from '../src/notifications/store.js';
 import { APP_REVIEW_EVENTS, APP_SUBSCRIPTION_EVENTS } from '../src/notifications/topics.js';
-import { APP_ID, resetEnvironment, seed, seedForApp } from './helpers.js';
+import { APP_GID, APP_ID, resetEnvironment, seed, seedForApp } from './helpers.js';
 
 /**
  * What gets said, to whom, and how many times.
@@ -550,6 +550,56 @@ describe('saying it exactly once', () => {
 
     assert.equal((await dispatchPending(db)).sent, 0);
     assert.equal(sent.length, 1);
+  });
+
+  /**
+   * The reported failure: a conversion is announced on its billing date, while
+   * the payment is still in flight, and again a fortnight later when the sale
+   * settles into a payout batch and the conversion's date moves onto it.
+   */
+  it('announces a conversion once, even when its date firms up later', async () => {
+    const db = seed([
+      {
+        chargeRef: 'annual',
+        shopId: '1',
+        amount: 290,
+        billingInterval: 'ANNUAL',
+        activatedAt: '2024-03-01T16:05:37Z',
+        billingOn: '2024-03-15T00:00:00Z',
+      },
+    ]);
+    const channelId = channelWithTopic(db);
+    watermark(db, channelId, '2024-02-01T00:00:00Z');
+    stubFetch(ok);
+
+    await dispatchPending(db);
+    assert.deepEqual(headlines(), ['Trial started', 'Trial converted']);
+
+    const { insertTransactions } = await import('../src/sync/ingest.js');
+    const { rebuildDerivedTables } = await import('../src/sync/derive.js');
+    insertTransactions(db, [
+      {
+        id: 'gid://partners/AppSubscriptionSale/annual-0',
+        createdAt: '2024-04-02T07:47:05Z',
+        __typename: 'AppSubscriptionSale',
+        app: { id: APP_GID, name: 'Test App' },
+        shop: { id: 'gid://partners/Shop/1', name: 'Shop 1', myshopifyDomain: 's1.example' },
+        chargeId: 'gid://shopify/AppSubscription/annual',
+        billingInterval: 'ANNUAL',
+        grossAmount: { amount: '290', currencyCode: 'USD' },
+        netAmount: { amount: '246.5', currencyCode: 'USD' },
+        shopifyFee: { amount: '43.5', currencyCode: 'USD' },
+      },
+    ]);
+    rebuildDerivedTables(db);
+
+    const { occurred_at } = db
+      .prepare(`SELECT occurred_at FROM customer_events WHERE type = 'trial_converted'`)
+      .get() as { occurred_at: string };
+    assert.equal(occurred_at, '2024-04-02T07:47:05.000Z', 'the conversion moved onto the sale');
+
+    assert.equal((await dispatchPending(db)).sent, 0);
+    assert.deepEqual(headlines(), ['Trial started', 'Trial converted']);
   });
 
   it('tells a second channel the same news', async () => {

@@ -250,3 +250,72 @@ describe('migration 2 — install interval opening event', () => {
     db.close();
   });
 });
+
+describe('migration 3 — undated trial conversion ids', () => {
+  const CHARGE = 'gid://shopify/AppSubscription/74727489765';
+  const dated = (at: string) => `111|shop-1|derived:trial_converted|${at}|${CHARGE}`;
+  const undated = `111|shop-1|derived:trial_converted|${CHARGE}`;
+
+  function deliver(db: Db, channel: string, eventId: string, at: string, ok = 1, error: string | null = null): void {
+    db.prepare(
+      `INSERT OR IGNORE INTO notification_channels (id, name, webhook_url, created_at)
+       VALUES (?, ?, 'https://hooks.slack.com/services/T/B/x', '2026-01-01T00:00:00Z')`,
+    ).run(channel, channel);
+    db.prepare(
+      'INSERT INTO notification_deliveries (channel_id, event_id, delivered_at, ok, error) VALUES (?,?,?,?,?)',
+    ).run(channel, eventId, at, ok, error);
+  }
+
+  function ledger(db: Db, channel: string): Array<{ event_id: string; delivered_at: string; ok: number; error: string | null }> {
+    return db
+      .prepare('SELECT event_id, delivered_at, ok, error FROM notification_deliveries WHERE channel_id = ? ORDER BY event_id')
+      .all(channel) as Array<{ event_id: string; delivered_at: string; ok: number; error: string | null }>;
+  }
+
+  it('records a conversion already announced under its dated id as announced', () => {
+    const db = freshDb();
+    // Told twice already: once on the billing date, once when the sale settled.
+    deliver(db, 'ch-1', dated('2026-10-11T00:00:00.000Z'), '2026-10-11T06:00:00.000Z');
+    deliver(db, 'ch-1', dated('2026-10-29T07:47:05.000Z'), '2026-10-29T08:43:00.000Z');
+    const subscribed = `111|shop-1|SUBSCRIPTION_CHARGE_ACTIVATED|2026-09-27T16:05:37.000Z|${CHARGE}`;
+    deliver(db, 'ch-1', subscribed, '2026-09-27T18:00:00.000Z');
+
+    migrate(db);
+
+    assert.deepEqual(
+      ledger(db, 'ch-1').map((row) => [row.event_id, row.delivered_at]),
+      [
+        [subscribed, '2026-09-27T18:00:00.000Z'],
+        [dated('2026-10-11T00:00:00.000Z'), '2026-10-11T06:00:00.000Z'],
+        [dated('2026-10-29T07:47:05.000Z'), '2026-10-29T08:43:00.000Z'],
+        [undated, '2026-10-11T06:00:00.000Z'],
+      ],
+      'dated rows stay for events not yet rebuilt; the undated id dates from the first telling',
+    );
+    db.close();
+  });
+
+  it('carries a retired delivery across as retired', () => {
+    const db = freshDb();
+    deliver(db, 'ch-2', dated('2026-10-11T00:00:00.000Z'), '2026-10-11T06:00:00.000Z', 0, 'invalid_token');
+
+    migrate(db);
+
+    const row = ledger(db, 'ch-2').find((r) => r.event_id === undated);
+    assert.deepEqual(row && [row.ok, row.error], [0, 'invalid_token']);
+    db.close();
+  });
+
+  it('replays as a no-op', () => {
+    const db = freshDb();
+    deliver(db, 'ch-1', dated('2026-10-11T00:00:00.000Z'), '2026-10-11T06:00:00.000Z');
+    migrate(db);
+    const once = ledger(db, 'ch-1');
+
+    db.pragma('user_version = 0');
+    migrate(db);
+
+    assert.deepEqual(ledger(db, 'ch-1'), once);
+    db.close();
+  });
+});
