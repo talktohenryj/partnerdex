@@ -3448,16 +3448,6 @@ button.primary.danger {
   align-items: center;
 }
 
-.cv-new {
-  margin-left: 12px;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.cv-draft {
-  font-style: italic;
-}
-
 .page-tab .cv-stale {
   margin-left: 0;
 }

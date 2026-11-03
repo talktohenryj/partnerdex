@@ -2,22 +2,18 @@ import type { SavedAudienceSummary } from '../api';
 
 /**
  * The saved lists over the Contacts table: All contacts first, then each
- * saved audience with its live count, then the unsaved draft while there is
- * one. Links, so every list has a URL.
+ * saved audience with its live count. Saving the rules on All contacts adds
+ * a tab. Links, so every list has a URL.
  */
 export function ContactLists({
   listId,
   allCount,
   audiences,
-  draftOpen,
-  onNew,
 }: {
-  /** '' for All contacts, 'new' for the draft, otherwise an audience id. */
+  /** '' for All contacts, otherwise an audience id. */
   listId: string;
   allCount: number | null;
   audiences: SavedAudienceSummary[];
-  draftOpen: boolean;
-  onNew: () => void;
 }) {
   const tab = (active: boolean) => (active ? 'page-tab is-active' : 'page-tab');
   return (
@@ -47,14 +43,6 @@ export function ContactLists({
           )}
         </a>
       ))}
-      {draftOpen ? (
-        <a href="#/contacts/new" className={`${tab(listId === 'new')} cv-draft`} aria-current={listId === 'new' ? 'page' : undefined}>
-          New audience
-        </a>
-      ) : null}
-      <button type="button" className="link-button cv-new" onClick={onNew}>
-        + New audience
-      </button>
     </nav>
   );
 }
