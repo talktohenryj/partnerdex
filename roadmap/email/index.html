@@ -73,20 +73,20 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 <h2>Status board</h2>
 <div class="tw"><table>
 <tr><th>Sprint</th><th>What ships</th><th>Migration</th><th>Status</th></tr>
-<tr><td><a href="sprint-1.html">S1 · Audiences</a></td><td>Email page + Audiences tab: pick app, statuses, roles → live count, breakdown, sample; save named audiences; CSV export</td><td>4 (<code>email_audiences</code>)</td><td><span class="chip todo">Not started</span></td></tr>
-<tr><td><a href="sprint-2.html">S2 · Compose + send</a></td><td>Settings tab (sender fields), Campaigns tab, compose with merge fields, test send, prepare → type-to-confirm → send via Resend batch, resumable runner, one-click unsubscribe, footer</td><td>5 (<code>email_settings</code>, <code>email_campaigns</code>, <code>email_sends</code>)</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-1.html">S1 · Audiences</a></td><td>Email page + Audiences tab: pick app, statuses, roles → live count, breakdown, sample; save named audiences; CSV export</td><td>6 (<code>email_audiences</code>)</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-2.html">S2 · Compose + send</a></td><td>Settings tab (sender fields), Campaigns tab, compose with merge fields, test send, prepare → type-to-confirm → send via Resend batch, resumable runner, one-click unsubscribe, footer</td><td>6 (<code>email_settings</code>, <code>email_campaigns</code>, <code>email_sends</code>)</td><td><span class="chip todo">Not started</span></td></tr>
 <tr><td><a href="sprint-3.html">S3 · Delivery + history</a></td><td>Resend webhook (signed) → delivered / bounced / complained / opened / clicked; bounces + complaints suppress; campaign report; "Emails" on the contact and customer pages</td><td>none (columns ship in 5)</td><td><span class="chip todo">Not started</span></td></tr>
 <tr><td><a href="sprint-4.html">S4 · Lifecycle</a></td><td>Automated triggered email — open questions only (v2/v3)</td><td>—</td><td><span class="chip open">Not designed</span></td></tr>
 </table></div>
 
 <h2>Dependency graph</h2>
-<pre>contacts store (migration 3, shipped) ──► S1 audiences ──► S2 compose + send ──► S3 delivery + history ──► S4 lifecycle (open)
+<pre>contacts store (migration 4, shipped) ──► S1 audiences ──► S2 compose + send ──► S3 delivery + history ──► S4 lifecycle (open)
                                                    │
                                      Resend domain verified + From address (Henry) — gates the first REAL send, not the build</pre>
 
 <h2>The problem today</h2>
 <ul>
-<li><b>The list exists; the send does not.</b> <code>contacts</code> / <code>contact_shops</code> / <code>contact_suppressions</code> (migration 3, <code>src/db/migrate.ts</code>) hold the people. The Contacts page (<code>src/contacts/list.ts</code>, <code>web/src/components/Contacts.tsx</code>) can search and suppress them. Nothing in <code>src/</code> sends an email — no Resend client, no transport, no template, no unsubscribe route.</li>
+<li><b>The list exists; the send does not.</b> <code>contacts</code> / <code>contact_shops</code> / <code>contact_suppressions</code> (migration 4, <code>src/db/migrate.ts</code>) hold the people. The Contacts page (<code>src/contacts/list.ts</code>, <code>web/src/components/Contacts.tsx</code>) can search and suppress them. Nothing in <code>src/</code> sends an email — no Resend client, no transport, no template, no unsubscribe route.</li>
 <li><b>No way to split by what matters.</b> The Contacts filters are data-hygiene filters (<code>ContactLinkedFilter = 'all' | 'unlinked' | 'ambiguous' | 'suppressed'</code>). The question Henry needs answered — "every owner and staff member of a <i>paying</i> iziGift store" — needs the per-store status that only <code>src/customers/index.ts</code> computes (<code>statusOf()</code> → <code>'paying' | 'trialing' | 'installed' | 'churned' | 'gone'</code>), and it is private to the Customers list today.</li>
 <li><b>The suppression store has no inbound path from email.</b> <code>suppressContact()</code> accepts <code>'resend_webhook' | 'manual' | 'csv_import'</code>, but no route produces <code>resend_webhook</code>, and an unsubscribe link has nowhere to land.</li>
 <li><b>The reason it matters now.</b> ~158 paying iziGift stores, fewer than 50 active (Henry, 2026-10-01). The merchant newsletter has been parked since July for want of a send tool. A broadcast to "paying but not using it" is the cheapest churn defense available.</li>
@@ -95,7 +95,7 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 <h2>What exists today vs the gap</h2>
 <div class="tw"><table>
 <tr><th>Reuse (do not rebuild)</th><th>Where</th><th>Used by</th></tr>
-<tr><td>Contacts tables + suppression mirror</td><td><code>src/db/migrate.ts</code> migration 3; <code>contacts.is_suppressed</code>, <code>contact_suppressions</code></td><td>S1, S2, S3</td></tr>
+<tr><td>Contacts tables + suppression mirror</td><td><code>src/db/migrate.ts</code> migration 4; <code>contacts.is_suppressed</code>, <code>contact_suppressions</code></td><td>S1, S2, S3</td></tr>
 <tr><td>Email-global suppress / unsuppress</td><td><code>suppressContact()</code>, <code>unsuppressContact()</code>, <code>normalizeEmail()</code> in <code>src/contacts/upsert.ts</code></td><td>S2 (unsubscribe), S3 (bounce/complaint)</td></tr>
 <tr><td>Per-store status + live MRR</td><td><code>summarySql()</code> + <code>statusOf()</code> in <code>src/customers/index.ts</code> (private today → exported helper in S1)</td><td>S1</td></tr>
 <tr><td>Primary-shop rule (owner first, then highest MRR)</td><td><code>primaryShop</code> in <code>src/contacts/list.ts</code></td><td>S1 (dedupe)</td></tr>
@@ -160,7 +160,7 @@ Campaigns tab ── subject + body (+ {{first_name}} {{shop_name}}) ──► T
 <h2>Open questions</h2>
 <div class="tw"><table>
 <tr><th>#</th><th>Question</th><th>Blocks</th><th>Recommendation</th></tr>
-<tr><td>Q1</td><td><b>Migration numbers.</b> Usage Metrics (fork, not started) has planned 4 and 5. Email is on the upstream-bound line and also wants 4 and 5.</td><td>S1 build</td><td>Email takes <b>4</b> (S1) and <b>5</b> (S2) because it is the one going upstream next after contacts; renumber Usage Metrics to 6/7 in its roadmap before either starts. Agree with Aditya while the contacts PR is open (fork <code>CLAUDE.md</code>). <span class="chip open">Henry to confirm</span></td></tr>
+<tr><td>Q1</td><td><b>Migration numbers.</b> Upstream took 3 (undated trial conversion ids, 2026-10-29), so contacts moved to 4 on <code>contacts-upstream</code> and fork <code>main</code> (deployed 2026-11-03).</td><td>S1 build</td><td>Email takes <b>5</b> (S1) and <b>6</b> (S2), the next upstream-bound numbers after contacts. Usage Metrics moves to 7 and 8. Before S1 merges, check upstream <code>main</code> again and agree the numbers with Aditya on the contacts PR (fork <code>CLAUDE.md</code>). <span class="chip done">Decided 2026-11-03</span></td></tr>
 <tr><td>Q2</td><td><b>From address + domain.</b> Henry supplies later. Must be on a Resend-verified domain (SPF/DKIM).</td><td>First real send only — not the build</td><td>A subdomain (e.g. <code>updates.izigift.co</code>) keeps broadcast reputation away from gift-card delivery mail on the root domain. Settings tab shows verification state (S2).</td></tr>
 <tr><td>Q3</td><td><b>Ambiguous matches.</b> A <code>contact_shops</code> row with <code>match_method = 'ambiguous'</code> is a best guess.</td><td>S1 resolver</td><td>Exclude, and show the count ("4 left out: store match not confirmed") with a link to the Contacts Ambiguous filter. Default in the spec.</td></tr>
 <tr><td>Q4</td><td><b>Open tracking.</b> Opens need an HTML pixel and are unreliable (Apple Mail privacy). Clicks are reliable.</td><td>S3 only</td><td>Send <code>text</code> + minimal <code>html</code>; turn on Resend open + click tracking at the domain level; label opens "approximate" in the report.</td></tr>

@@ -51,13 +51,13 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 .tiny{font-size:12px;color:var(--muted)}
 </style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Audiences</a><a href="sprint-2.html" class="on">S2 · Compose + send</a><a href="sprint-3.html">S3 · Delivery + history</a><a href="sprint-4.html">S4 · Lifecycle (open)</a></nav><main>
 <h1>Sprint 2 — Compose + send</h1>
-<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · branch <code>email/s2-send</code> off <code>email-upstream</code> · migration 5</p>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · branch <code>email/s2-send</code> off <code>email-upstream</code> · migration 6</p>
 
 <h2>Why this ships now</h2>
 <p>S1 answers "who". This sprint answers "send them this": a plain-text founder email, a test to yourself, a frozen recipient list, a type-the-count confirmation, and a resumable send through Resend with the two things the law and the inbox providers require — a working one-click unsubscribe and a postal footer. Today PartnerDex has no transport, no unsubscribe route, and no record of what was sent to whom.</p>
 
 <h2>Why this is independently deployable</h2>
-<p>New tables (migration 5), new routes, a new background loop, two new tabs. The only edit to existing behaviour is one more value in the <code>suppressContact()</code> source union. With <code>RESEND_API_KEY</code>, <code>PUBLIC_BASE_URL</code>, or <code>EMAIL_LINK_SECRET</code> unset — or with no <code>DASHBOARD_PASSWORD</code> — Test, Prepare, and Send return 403 with the reason, the runner does not start, and the app behaves exactly as after S1. Resend itself refuses addresses on its bounce/complaint suppression list, so sending before S3 is safe; S3 only mirrors those events back.</p>
+<p>New tables (migration 6), new routes, a new background loop, two new tabs. The only edit to existing behaviour is one more value in the <code>suppressContact()</code> source union. With <code>RESEND_API_KEY</code>, <code>PUBLIC_BASE_URL</code>, or <code>EMAIL_LINK_SECRET</code> unset — or with no <code>DASHBOARD_PASSWORD</code> — Test, Prepare, and Send return 403 with the reason, the runner does not start, and the app behaves exactly as after S1. Resend itself refuses addresses on its bounce/complaint suppression list, so sending before S3 is safe; S3 only mirrors those events back.</p>
 
 <h2>Build</h2>
 <ol class="build">
@@ -70,8 +70,8 @@ Add an <code>email</code> block to the config object, beside <code>contactsInges
 }</pre>
 And <code>export function sendingBlockedReason(): string | null</code> in <code>src/email/guard.ts</code> (new): returns the first of "Set DASHBOARD_PASSWORD before sending email." / "Set RESEND_API_KEY…" / "Set PUBLIC_BASE_URL…" / "Set EMAIL_LINK_SECRET…" / "Fill in the sender settings…" / null. Add all three to <code>.env.example</code> and to <code>resetEnvironment()</code> in <code>test/helpers.ts</code> as <code>''</code>.</li>
 
-<li><b>Migration 5 — <code>src/db/migrate.ts</code></b>
-<code>EMAIL_SEND_SCHEMA_SQL</code>, <code>{ version: 5, … }</code>. All Role 4.
+<li><b>Migration 6 — <code>src/db/migrate.ts</code></b>
+<code>EMAIL_SEND_SCHEMA_SQL</code>, <code>{ version: 6, … }</code>. All Role 4.
 <pre>CREATE TABLE IF NOT EXISTS email_settings (
   id             INTEGER PRIMARY KEY CHECK (id = 1),
   from_name      TEXT NOT NULL DEFAULT '',
@@ -221,7 +221,7 @@ Fake transport records calls and can be told to fail retryably / non-retryably. 
 <li><code>prepare freezes recipients and snapshots sender</code> · <code>edit after prepare returns to draft</code> · <code>confirm count must match</code> · <code>stale prepare rejected</code></li>
 <li><code>sends in batches of 100 with sequential keys</code> · <code>resumes a sending batch with the same key after restart</code> · <code>retryable error keeps rows sending</code> · <code>non-retryable error fails the batch only</code> · <code>suppressed after prepare is skipped</code> · <code>cancel skips queued rows</code></li>
 <li><code>unsubscribe GET does not write</code> · <code>unsubscribe POST suppresses idempotently</code> · <code>tampered token rejected</code> · <code>test token is a no-op</code></li>
-<li><code>migrations are 1..5 in order</code></li>
+<li><code>migrations are 1..6 in order</code></li>
 </ul>
 
 <h2>Explicitly NOT in this sprint</h2>
