@@ -128,7 +128,7 @@ export interface EmailTransport {
 <code>resendTransport(apiKey)</code> uses global <code>fetch</code> (no SDK dependency, keeps upstream light): <code>POST https://api.resend.com/emails/batch</code> with <code>Authorization: Bearer</code>, <code>Idempotency-Key</code>, body <code>[{ from, to: [to], reply_to, subject, text, html, headers }]</code>; <code>POST /emails</code> for one; <code>GET /domains</code> and match <code>name</code> case-insensitively. 15 s timeout via <code>AbortSignal.timeout</code>. Throws <code>TransportError { status, retryable, message }</code>: retryable for network errors, 429, and 5xx; not retryable for 4xx. Response ids map to input order. Tests inject a fake transport through <code>setTransportForTests()</code> — never call Resend in tests.</li>
 
 <li><b>Settings — <code>src/email/settings.ts</code> + routes</b>
-<code>getSettings(db)</code> (returns defaults when no row), <code>saveSettings(input, db)</code> (upsert id 1). Validation, 422 per field: <code>from_name</code> 1–80 chars, no CR/LF; <code>from_email</code> and <code>reply_to</code> match a plain address check and are lowercased; <code>footer_address</code> 10–300 chars (a physical postal address — CAN-SPAM). Reply-To may be blank (then omitted). Routes on <code>emailRouter()</code>: <code>GET /settings</code>, <code>PUT /settings</code>, <code>GET /settings/domain</code> → <code>{ domain, status, blockedReason }</code> via <code>transport.domainStatus()</code>. Nothing here is env-configured on purpose (Henry: "sender should be variables we can enter in the interface").</li>
+<code>getSettings(db)</code> (returns defaults when no row), <code>saveSettings(input, db)</code> (upsert id 1). Validation, 422 per field: <code>from_name</code> 1–80 chars, no CR/LF; <code>from_email</code> and <code>reply_to</code> match a plain address check and are lowercased; <code>footer_address</code> 10–300 chars (a physical postal address — CAN-SPAM). Reply-To may be blank (then omitted). Routes on <code>emailRouter()</code> — new in this sprint: <code>src/server/email.ts</code>, mounted after <code>app.use('/api', requireAuth)</code> as <code>app.use('/api/email', emailRouter())</code>, errors via <code>EmailError</code> in <code>src/email/errors.ts</code> (mirrors <code>ContactsError</code>) and <code>sendError()</code>: <code>GET /settings</code>, <code>PUT /settings</code>, <code>GET /settings/domain</code> → <code>{ domain, status, blockedReason }</code> via <code>transport.domainStatus()</code>. Nothing here is env-configured on purpose (Henry: "sender should be variables we can enter in the interface").</li>
 
 <li><b>Renderer — <code>src/email/render.ts</code> (new)</b>
 <pre>export const MERGE_FIELDS = ['first_name','last_name','shop_name','shop_domain','app_name'] as const;
@@ -158,7 +158,7 @@ Widen the union in <code>src/contacts/upsert.ts</code> <code>suppressContact()</
 
 <li><b>Prepare / confirm / send / cancel — <code>src/email/campaigns.ts</code></b>
 <ul>
-<li><code>prepareCampaign(id)</code>: requires <code>sendingBlockedReason() === null</code> and <code>domainStatus === 'verified'</code>, status <code>draft|ready</code>, subject and body present. Runs <code>resolveAudience()</code> (S1); in one transaction deletes old queued rows, inserts one <code>email_sends</code> row per recipient (<code>merge</code> JSON includes <code>app_name</code> from <code>apps.name</code>), snapshots sender settings onto the campaign, sets <code>status='ready'</code>, <code>recipient_count</code>, <code>prepared_at</code>. Returns <code>{ count, excluded, sample[≤10], missingFirstName }</code>. 0 recipients → 422.</li>
+<li><code>prepareCampaign(id)</code>: requires <code>sendingBlockedReason() === null</code> and <code>domainStatus === 'verified'</code>, status <code>draft|ready</code>, subject and body present. Runs <code>resolveAudience()</code> (S1, <code>src/audiences/audience.ts</code>); in one transaction deletes old queued rows, inserts one <code>email_sends</code> row per recipient (<code>merge</code> JSON includes <code>app_name</code> from <code>apps.name</code>), snapshots sender settings onto the campaign, sets <code>status='ready'</code>, <code>recipient_count</code>, <code>prepared_at</code>. Returns <code>{ count, excluded, sample[≤10], missingFirstName }</code>. 0 recipients → 422.</li>
 <li><code>startSend(id, confirmCount)</code>: status must be <code>ready</code>; <code>confirmCount === recipient_count</code> else 409 "Type {n} to confirm."; <code>prepared_at</code> within 60 min else 409 "The list is over an hour old. Prepare it again." Sets <code>sending</code>, <code>started_at</code>, wakes the runner.</li>
 <li><code>cancelCampaign(id)</code>: <code>sending|ready</code> → <code>cancelled</code>; queued rows → <code>skipped</code>/<code>cancelled</code>. A batch already in flight completes.</li>
 <li><code>sendTest(id, to?)</code>: renders with the first prepared or resolved recipient's merge values (falls back to placeholders), subject prefixed <code>[Test] </code>, test unsubscribe token, <code>transport.sendOne()</code>. <code>to</code> defaults to settings <code>reply_to</code>. Max 20 tests per campaign per hour (in-memory counter).</li>
@@ -178,10 +178,11 @@ Same shape as <code>src/sync/scheduler.ts</code>: a chained <code>setTimeout</co
 Log one line per batch (<code>campaign, batch, sent, failed</code>) — never the recipient addresses.</li>
 
 <li><b>UI — <code>web/src/components/Email.tsx</code> + <code>EmailCampaigns.tsx</code>, <code>EmailCompose.tsx</code>, <code>EmailSettings.tsx</code> (new)</b>
+The Email page is new in this sprint (S1 put audiences on the Contacts page). Add a <code>PageSpec</code> <code>{ id: 'email', label: 'Email', title: 'Email', kind: 'email', cards: [] }</code> as a top-level item in the first <code>NAV</code> group, after Customers, with an envelope icon (<code>M3.5 5.5h15v11h-15zM3.5 6l7.5 6 7.5-6</code>) in <code>ICONS</code> in <code>Nav.tsx</code>; add <code>'email'</code> to the <code>kind</code> union and an <code>isEmail</code> branch in <code>App.tsx</code> beside <code>isContacts</code>. <code>Email.tsx</code> renders the <code>.page-tabs</code> strip with Campaigns and Settings.
 <ul>
 <li><b>Settings tab:</b> From name, From email, Reply-To, Footer postal address; Save; a domain chip (Verified / Pending / Not in Resend) from <code>/settings/domain</code>; a banner with <code>blockedReason</code> when sending is blocked.</li>
 <li><b>Campaigns tab:</b> table — name, status chip, audience summary, recipients, sent, date; "New campaign".</li>
-<li><b>Compose:</b> left — name, audience (pick saved, or the S1 picker inline, showing the live count), subject, preview text, body textarea, merge-field buttons that insert <code>{{first_name|there}}</code> etc.; right — live preview from <code>/render</code> (debounced 400 ms) with From / Reply-To / Subject lines and the footer. Actions: Save draft, Send test (address field prefilled with Reply-To), <b>Review and send…</b></li>
+<li><b>Compose:</b> left — name, audience (a select of saved audiences from <code>GET /api/audiences</code> with live counts, and an "Edit in Contacts" link to <code>#/contacts/&lt;id&gt;</code>; to make a new one, Henry saves it on the Contacts page first), subject, preview text, body textarea, merge-field buttons that insert <code>{{first_name|there}}</code> etc.; right — live preview from <code>/render</code> (debounced 400 ms) with From / Reply-To / Subject lines and the footer. Actions: Save draft, Send test (address field prefilled with Reply-To), <b>Review and send…</b></li>
 <li><b>Confirm (modal, after <code>/prepare</code>):</b> "This sends <b>171</b> emails from Henry &lt;…&gt;", subject, audience, the sample of 10, excluded line, a warning when some recipients lack a first name and the body uses <code>{{first_name}}</code> without a fallback, and a text box "Type 171 to send". Send stays disabled until it matches.</li>
 <li><b>Sending:</b> campaign page polls <code>GET /campaigns/:id</code> every 3 s — progress bar sent / total, failed and skipped counts, Cancel button.</li>
 </ul></li>
@@ -235,7 +236,7 @@ Fake transport records calls and can be told to fail retryably / non-retryably. 
 <h2>Design mockups</h2>
 <h3>Settings tab</h3>
 <div class="mock">
-<div class="mtabs"><span>Audiences</span><span>Campaigns</span><span class="on">Settings</span></div>
+<div class="mtabs"><span>Campaigns</span><span class="on">Settings</span></div>
 <div class="row"><div><label>From name</label><div class="in">Henry from iziGift</div></div><div><label>From email</label><div class="in">henry@updates.izigift.co</div></div></div>
 <div class="row"><div><label>Reply-To</label><div class="in">henry@izigift.co</div></div><div><label>Sending domain</label><span class="chip done">updates.izigift.co · Verified</span></div></div>
 <div><label>Footer postal address (required by law)</label><div class="ta">[Business name] · [Street] · [City, State ZIP]</div></div>
@@ -244,7 +245,7 @@ Fake transport records calls and can be told to fail retryably / non-retryably. 
 
 <h3>Compose</h3>
 <div class="mock">
-<div class="mtabs"><span>Audiences</span><span class="on">Campaigns</span><span>Settings</span></div>
+<div class="mtabs"><span class="on">Campaigns</span><span>Settings</span></div>
 <div class="split">
 <div>
 <label>Audience</label><div class="in">Paying — owners + staff · <b>171 people</b></div>

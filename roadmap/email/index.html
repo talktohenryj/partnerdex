@@ -68,14 +68,15 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 <tr><td>Sender details</td><td><b>From name, From address, Reply-To, and footer postal address are fields in the UI</b> (Settings tab), not env vars. Henry gives the From address later; Reply-To will be Henry's iziGift address.</td></tr>
 <tr><td>Send safety</td><td><b>Confirm step:</b> a screen with the frozen recipient count and a sample; Henry types the count to enable Send. No second password.</td></tr>
 <tr><td>Where it lives</td><td>This folder (<code>partnerdex/roadmap/email/</code>, fork <code>main</code>). Code builds on a branch off <code>contacts-upstream</code> — see <a href="#branching">Branching</a>.</td></tr>
+<tr><td>Where audiences live</td><td><b>On the Contacts page (2026-11-03).</b> An audience is a collection of contacts: saved lists are tabs above the Contacts table, "All contacts" first, with the same columns. Rules are filter buttons above the table. The Email page arrives in S2 with the first send.</td></tr>
 </table></div>
 
 <h2>Status board</h2>
 <div class="tw"><table>
 <tr><th>Sprint</th><th>What ships</th><th>Migration</th><th>Status</th></tr>
-<tr><td><a href="sprint-1.html">S1 · Audiences</a></td><td>Email page + Audiences tab: pick app, statuses, roles → live count, breakdown, sample; save named audiences; CSV export</td><td>6 (<code>email_audiences</code>)</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-1.html">S1 · Audiences</a></td><td>Contacts page with saved lists: All contacts + audiences as tabs, store status / role rule buttons with live counts, same table with a Status column, left-out list, CSV export</td><td>5 (<code>audiences</code>)</td><td><span class="chip todo">Not started</span></td></tr>
 <tr><td><a href="sprint-2.html">S2 · Compose + send</a></td><td>Settings tab (sender fields), Campaigns tab, compose with merge fields, test send, prepare → type-to-confirm → send via Resend batch, resumable runner, one-click unsubscribe, footer</td><td>6 (<code>email_settings</code>, <code>email_campaigns</code>, <code>email_sends</code>)</td><td><span class="chip todo">Not started</span></td></tr>
-<tr><td><a href="sprint-3.html">S3 · Delivery + history</a></td><td>Resend webhook (signed) → delivered / bounced / complained / opened / clicked; bounces + complaints suppress; campaign report; "Emails" on the contact and customer pages</td><td>none (columns ship in 5)</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-3.html">S3 · Delivery + history</a></td><td>Resend webhook (signed) → delivered / bounced / complained / opened / clicked; bounces + complaints suppress; campaign report; "Emails" on the contact and customer pages</td><td>none (columns ship in 6)</td><td><span class="chip todo">Not started</span></td></tr>
 <tr><td><a href="sprint-4.html">S4 · Lifecycle</a></td><td>Automated triggered email — open questions only (v2/v3)</td><td>—</td><td><span class="chip open">Not designed</span></td></tr>
 </table></div>
 
@@ -111,11 +112,11 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 <h2>What / Where / Sprint</h2>
 <div class="tw"><table>
 <tr><th>What</th><th>Where</th><th>Sprint</th></tr>
-<tr><td>Audience definition</td><td><code>{ appId, statuses: CustomerStatus[], roles: ContactRole[] }</code> — <code>src/email/audience.ts</code></td><td>S1</td></tr>
-<tr><td>Saved audiences</td><td><code>email_audiences(id, name, definition JSON, created_at, updated_at)</code></td><td>S1</td></tr>
+<tr><td>Audience definition</td><td><code>{ appId, statuses: CustomerStatus[], roles: ContactRole[] }</code> — <code>src/audiences/audience.ts</code></td><td>S1</td></tr>
+<tr><td>Saved audiences</td><td><code>audiences(id, name, definition JSON, created_at, updated_at)</code></td><td>S1</td></tr>
 <tr><td>Resolver</td><td><code>resolveAudience(def, db) → { recipients, excluded }</code></td><td>S1</td></tr>
 <tr><td>Status helper</td><td><code>shopStatuses(db, appId) → Map&lt;shopId, { status, mrr, name }&gt;</code> exported from <code>src/customers/index.ts</code></td><td>S1</td></tr>
-<tr><td>Audience API</td><td><code>POST /api/email/audiences/preview</code>; <code>GET|POST /api/email/audiences</code>; <code>PUT|DELETE /api/email/audiences/:id</code>; <code>GET /api/email/audiences/export.csv?…</code></td><td>S1</td></tr>
+<tr><td>Audience API</td><td><code>POST /api/audiences/preview</code>; <code>GET|POST /api/audiences</code>; <code>PUT|DELETE /api/audiences/:id</code>; <code>GET /api/audiences/export.csv?…</code></td><td>S1</td></tr>
 <tr><td>Sender settings (UI-entered)</td><td><code>email_settings(id=1, from_name, from_email, reply_to, footer_address, updated_at)</code>; <code>GET|PUT /api/email/settings</code>; <code>GET /api/email/settings/domain</code></td><td>S2</td></tr>
 <tr><td>Campaigns</td><td><code>email_campaigns(id, name, subject, preview_text, body, audience JSON, audience_id, status, sender snapshot, counts, timestamps)</code></td><td>S2</td></tr>
 <tr><td>Per-recipient sends</td><td><code>email_sends(campaign_id, email, shop_id, merge JSON, status, resend_id, error, sent_at, delivered_at, opened_at, clicked_at, bounced_at, complained_at, unsubscribed_at)</code></td><td>S2 (S3 fills the event columns)</td></tr>
@@ -129,7 +130,7 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 </table></div>
 
 <h2>The send, end to end</h2>
-<pre>Audiences tab ── definition {appId, statuses, roles} ──► resolveAudience() ──► count + sample (live)
+<pre>Contacts page, an audience tab ── definition {appId, statuses, roles} ──► resolveAudience() ──► count + rows (live)
       │
 Campaigns tab ── subject + body (+ {{first_name}} {{shop_name}}) ──► Test send to one address
       │
@@ -144,7 +145,7 @@ Campaigns tab ── subject + body (+ {{first_name}} {{shop_name}}) ──► T
   Resend webhook (S3) ──► delivered / opened / clicked stamps; bounced(hard) + complained ──► suppressContact(source='resend_webhook')</pre>
 
 <h2>Why each sprint ships alone</h2>
-<p><b>S1 alone.</b> One migration that only creates <code>email_audiences</code>, one read-mostly router behind the dashboard gate, one new page. No existing query changes behaviour: <code>shopStatuses()</code> is extracted from the code the Customers list already runs, and the Customers list keeps calling the same SQL (its tests prove it). Value on its own: Henry can answer "who exactly is a paying iziGift owner or staff member?" with a count and a list, and export the CSV into any tool he already has — the newsletter is unblocked even if S2 slips.</p>
+<p><b>S1 alone.</b> One migration that only creates <code>audiences</code>, one read-mostly router behind the dashboard gate, and saved lists on the Contacts page whose All contacts tab keeps today's behaviour. No existing query changes behaviour: <code>shopStatuses()</code> is extracted from the code the Customers list already runs, and the Customers list keeps calling the same SQL (its tests prove it). Value on its own: Henry can answer "who exactly is a paying iziGift owner or staff member?" with a count and a list, and export the CSV into any tool he already has — the newsletter is unblocked even if S2 slips.</p>
 <p><b>S2 alone (after S1).</b> Adds tables and routes; touches no existing write path except widening the <code>suppressContact()</code> source union by one value. With <code>RESEND_API_KEY</code> unset the Send and Test buttons are disabled with a reason and the runner never starts — the app behaves exactly as after S1. Resend already refuses to deliver to addresses on its own bounce/complaint suppression list, so sending before S3 does not hammer bad addresses; S3 only mirrors those events into PartnerDex so the Contacts page and future audiences see them.</p>
 <p><b>S3 alone (after S2).</b> A new public webhook route plus reads. With <code>RESEND_WEBHOOK_SECRET</code> unset the route answers 503 and campaigns simply show "sent" without delivery detail — S2 is unchanged.</p>
 
