@@ -1,4 +1,5 @@
 import type express from 'express';
+import { AudienceError } from '../audiences/errors.js';
 import { ContactsError } from '../contacts/upsert.js';
 import { MetricRequestError } from '../metrics/context.js';
 import { TimeRangeError } from '../metrics/time.js';
@@ -15,6 +16,10 @@ import { BigQueryError } from '../bigquery/connection.js';
  */
 export function sendError(response: express.Response, error: unknown): void {
   if (error instanceof MetricRequestError) {
+    response.status(error.status).json({ error: error.message });
+    return;
+  }
+  if (error instanceof AudienceError) {
     response.status(error.status).json({ error: error.message });
     return;
   }

@@ -316,6 +316,39 @@ describe('contacts list', () => {
       ['Solo Store', 'Acme'],
     );
   });
+
+  it('contacts list adds store status per app', () => {
+    seed([
+      {
+        chargeRef: 'pay-1',
+        shopId: '1',
+        amount: 30,
+        activatedAt: '2024-01-01T00:00:00Z',
+        firstSaleAt: '2024-01-02T00:00:00Z',
+      },
+    ]);
+    insertContact({ email: 'paid@example.com', firstName: 'Paid', shopId: '1', role: 'owner' });
+    insertContact({ email: 'quiet@example.com', firstName: 'Quiet', shopId: '20', role: 'owner' });
+
+    const before = listContacts({ appIds: [APP_ID], sort: 'name' });
+    const byEmail = Object.fromEntries(
+      before.contacts.map((row) => [row.email, row.primaryShop?.status]),
+    );
+    assert.deepEqual(byEmail, { 'paid@example.com': 'paying', 'quiet@example.com': null });
+    assert.deepEqual(
+      before.contacts.map((row) => row.email),
+      ['paid@example.com', 'quiet@example.com'],
+    );
+    assert.equal(before.contacts[0]!.shops[0]!.status, 'paying');
+  });
+
+  it('contacts list status is null with no status', () => {
+    insertContact({ email: 'quiet@example.com', firstName: 'Quiet', shopId: '20', role: 'owner' });
+    const row = listContacts().contacts[0]!;
+    assert.equal(row.primaryShop?.status, null);
+    assert.equal(row.primaryShop?.name, 'Solo Store');
+    assert.equal(row.primaryShop?.mrr, 0);
+  });
 });
 
 describe('manual match and suppression', () => {

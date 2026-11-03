@@ -79,6 +79,24 @@ CREATE TABLE IF NOT EXISTS contact_suppressions (
 ) WITHOUT ROWID;
 `;
 
+/**
+ * Saved audiences: a name and a rule (one app, store statuses, roles) over the
+ * contacts store. The rule is stored, not the people — membership is resolved
+ * live every time, so a store that stops paying leaves "Paying owners" without
+ * anyone editing the list.
+ */
+export const AUDIENCES_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS audiences (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  definition  TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+) WITHOUT ROWID;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_audiences_name ON audiences (lower(name));
+`;
+
 export const MIGRATIONS: Migration[] = [
   /*
    * The BigQuery connection stopped carrying per-app and per-spelling settings.
@@ -267,6 +285,12 @@ export const MIGRATIONS: Migration[] = [
     version: 4,
     up: (db) => {
       db.exec(CONTACTS_SCHEMA_SQL);
+    },
+  },
+  {
+    version: 5,
+    up: (db) => {
+      db.exec(AUDIENCES_SCHEMA_SQL);
     },
   },
 ];

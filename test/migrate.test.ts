@@ -86,6 +86,18 @@ describe('migration runner', () => {
     );
   });
 
+  it('migrations are 1..5 in order and 5 creates audiences', () => {
+    assert.ok(MIGRATIONS.length >= 5, 'audiences ship as migration 5');
+    assert.equal(MIGRATIONS[4]!.version, 5);
+    const db = freshDb();
+    migrate(db);
+    const table = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'audiences'`)
+      .get() as { name: string } | undefined;
+    assert.equal(table?.name, 'audiences');
+    db.close();
+  });
+
   it('starts a new database at 0 and leaves it at the highest version', () => {
     const db = freshDb();
     assert.equal(readUserVersion(db), 0);

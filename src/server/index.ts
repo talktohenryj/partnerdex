@@ -20,6 +20,7 @@ import { buildReviewEvents } from '../appstore/events.js';
 import { resolveScopedAppIds } from '../sync/index.js';
 import { onSyncComplete, startSyncScheduler, syncStatus } from '../sync/scheduler.js';
 import { authRequired, authRouter, requireAuth } from './auth.js';
+import { audiencesRouter } from './audiences.js';
 import { contactsDashboardRouter, contactsRouter } from './contacts.js';
 import { sendError } from './errors.js';
 import { notificationsRouter } from './notifications.js';
@@ -116,6 +117,7 @@ export function createApp(): express.Express {
   app.use('/api/listings', listingsRouter());
   app.use('/api/bigquery', bigqueryRouter());
   app.use('/api/contacts', contactsDashboardRouter());
+  app.use('/api/audiences', audiencesRouter());
 
   /**
    * The install funnel.

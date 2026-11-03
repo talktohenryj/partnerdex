@@ -1,4 +1,5 @@
 import { getConfig } from '../config.js';
+import { shopStatuses, type CustomerStatus, type ShopStatus } from '../customers/index.js';
 import { getDb } from '../db/index.js';
 import { asOfPredicate, type AsOfOptions } from '../metrics/asof.js';
 import { resolveScopedAppIds } from '../sync/index.js';
@@ -43,6 +44,8 @@ export interface ContactShop {
   currency: string | null;
   firstSeenAt: string | null;
   lastSeenAt: string | null;
+  /** The store's status with this membership's app; null when it has none. */
+  status: CustomerStatus | null;
 }
 
 export interface ContactSummary {
@@ -267,16 +270,20 @@ function toShop(row: LinkRow): ContactShop {
     currency: row.currency,
     firstSeenAt: row.firstSeenAt,
     lastSeenAt: row.lastSeenAt,
+    status: null,
   };
 }
 
-function rankShop(shop: ContactShop): number {
+function rankShop(shop: Pick<ContactShop, 'role'>): number {
   if (shop.role === 'owner') return 0;
   if (shop.role === 'staff') return 1;
   return 2;
 }
 
-function sortShops(shops: ContactShop[]): ContactShop[] {
+/** Owner first, then staff, then collaborator; then highest MRR; then name. */
+type RankedShop = Pick<ContactShop, 'role' | 'mrr' | 'name' | 'domain' | 'shopId'>;
+
+export function sortShops<T extends RankedShop>(shops: T[]): T[] {
   return [...shops].sort(
     (a, b) =>
       rankShop(a) - rankShop(b) ||
@@ -414,9 +421,16 @@ export function listContacts(
       )
       .all({ ...emailParams, ...live.params, ...apps.params, now }) as LinkRow[];
 
+    const statusesByApp = new Map<string, Map<string, ShopStatus>>();
+    for (const appId of new Set(linkRows.map((row) => row.appId))) {
+      statusesByApp.set(appId, shopStatuses(db, appId));
+    }
+
     for (const row of linkRows) {
       const list = shopsByEmail.get(row.email) ?? [];
-      list.push(toShop(row));
+      const shop = toShop(row);
+      shop.status = statusesByApp.get(row.appId)?.get(row.shopId)?.status ?? null;
+      list.push(shop);
       shopsByEmail.set(row.email, list);
     }
   }
