@@ -13,7 +13,8 @@
  *                         review once the App Store stops serving it; the
  *                         BigQuery connection, whose credential nothing else can
  *                         supply; and (via the migration runner in migrate.ts)
- *                         `contacts`, `contact_shops`, `contact_suppressions`
+ *                         `contacts`, `contact_shops`, `contact_suppressions`,
+ *                         and `audiences`
  *
  * Roles 1 and 2 are disposable: both are rebuilt from the API on demand. Role 4
  * is the only place in this store holding state that cannot be recovered by

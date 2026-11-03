@@ -592,7 +592,7 @@ function Dashboard({ onLogout }: { onLogout?: () => void }) {
           )
         ) : null}
 
-        {isContacts ? <Contacts appId={query.appId} /> : null}
+        {isContacts ? <Contacts appId={query.appId} listId={route.param} apps={apps} /> : null}
 
         {isNotifications ? <Notifications /> : null}
 

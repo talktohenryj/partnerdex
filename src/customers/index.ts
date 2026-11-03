@@ -203,6 +203,45 @@ function summarySql(appIds: string[], searching: boolean): { sql: string; params
   };
 }
 
+/** One store's standing with one app: the five words, and its live MRR. */
+export interface ShopStatus {
+  shopId: string;
+  name: string | null;
+  domain: string | null;
+  status: CustomerStatus;
+  mrr: number;
+  currency: string | null;
+}
+
+/**
+ * Every in-scope store's status with one app, keyed by shop id.
+ *
+ * One app at a time on purpose: a store paying for app A and churned from
+ * app B must read as churned when the question is about B. Built from the same
+ * SQL and the same `statusOf` the Customers list uses, so the two cannot
+ * disagree. A shop the app's feed never mentioned has no entry.
+ */
+export function shopStatuses(db: Db, appId: string): Map<string, ShopStatus> {
+  const built = summarySql([appId], false);
+  const rows = db
+    .prepare(built.sql)
+    .all({ ...built.params, now: new Date().toISOString() }) as Array<
+    SummaryRow & { everSubscribed: number }
+  >;
+  const map = new Map<string, ShopStatus>();
+  for (const row of rows) {
+    map.set(row.shopId, {
+      shopId: row.shopId,
+      name: row.name,
+      domain: row.domain,
+      status: statusOf(row, row.everSubscribed),
+      mrr: row.mrr,
+      currency: row.currency,
+    });
+  }
+  return map;
+}
+
 export type CustomerSort = 'mrr' | 'lifetime' | 'recent' | 'name';
 
 const ORDER_BY: Record<CustomerSort, string> = {

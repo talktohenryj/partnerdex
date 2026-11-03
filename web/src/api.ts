@@ -316,6 +316,8 @@ export interface ContactShop {
   currency: string | null;
   firstSeenAt: string | null;
   lastSeenAt: string | null;
+  /** The store's status with this membership's app; null when it has none. */
+  status: CustomerStatus | null;
 }
 
 export interface ContactSummary {
@@ -398,6 +400,111 @@ export const setContactSuppressed = (
   suppressed: boolean,
 ): Promise<{ ok: boolean; email: string; isSuppressed: boolean }> =>
   sendJson('PUT', `/api/contacts/${encodeURIComponent(email)}/suppression`, { suppressed });
+
+/* -------------------------------------------------------------- audiences */
+
+export interface AudienceDefinition {
+  appId: string;
+  statuses: CustomerStatus[];
+  roles: ContactRole[];
+}
+
+export interface AudienceRecipient {
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  source: string;
+  createdAt: string | null;
+  lastSeenAt: string | null;
+  isSuppressed: boolean;
+  matchMethod: ContactMatchMethod;
+  shopId: string;
+  shopName: string | null;
+  shopDomain: string | null;
+  role: ContactRole;
+  status: CustomerStatus;
+  mrr: number;
+  currency: string | null;
+  otherShops: number;
+}
+
+export type AudienceExclusionReason = 'suppressed' | 'ambiguous' | 'noStatus';
+
+export interface AudienceExcludedPerson extends Omit<AudienceRecipient, 'status'> {
+  status: CustomerStatus | null;
+  reason: AudienceExclusionReason;
+}
+
+export interface AudiencePreview {
+  definition: AudienceDefinition;
+  count: number;
+  matching: number;
+  stores: number;
+  multiStorePeople: number;
+  excluded: { suppressed: number; ambiguous: number; noStatus: number; merged: number };
+  byStatus: Record<CustomerStatus, number>;
+  byRole: Record<ContactRole, number>;
+  optionCounts: {
+    statuses: Record<CustomerStatus, number>;
+    roles: Record<ContactRole, number>;
+  };
+  rows: AudienceRecipient[];
+  excludedSample: AudienceExcludedPerson[];
+}
+
+export interface SavedAudienceSummary {
+  id: string;
+  name: string;
+  definition: AudienceDefinition;
+  stale: boolean;
+  count: number | null;
+}
+
+export interface SavedAudience {
+  id: string;
+  name: string;
+  definition: AudienceDefinition;
+  stale: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const fetchAudiences = (): Promise<{ audiences: SavedAudienceSummary[] }> =>
+  getJson<{ audiences: SavedAudienceSummary[] }>('/api/audiences');
+
+export const previewAudience = (body: {
+  definition: AudienceDefinition;
+  q?: string;
+  sort?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<AudiencePreview> => sendJson('POST', '/api/audiences/preview', body);
+
+export const createAudience = (
+  name: string,
+  definition: AudienceDefinition,
+): Promise<SavedAudience> => sendJson('POST', '/api/audiences', { name, definition });
+
+export const updateAudience = (
+  id: string,
+  patch: { name?: string; definition?: AudienceDefinition },
+): Promise<SavedAudience> => sendJson('PUT', `/api/audiences/${encodeURIComponent(id)}`, patch);
+
+export const deleteAudience = (id: string): Promise<void> =>
+  sendJson('DELETE', `/api/audiences/${encodeURIComponent(id)}`);
+
+/** A same-origin GET, so the session cookie rides along with a plain link. */
+export function audienceExportUrl(input: { id: string } | { definition: AudienceDefinition }): string {
+  const params = new URLSearchParams();
+  if ('id' in input) {
+    params.set('id', input.id);
+  } else {
+    params.set('appId', input.definition.appId);
+    params.set('statuses', input.definition.statuses.join(','));
+    params.set('roles', input.definition.roles.join(','));
+  }
+  return `/api/audiences/export.csv?${params.toString()}`;
+}
 
 /* --------------------------------------------------------------- reviews */
 
