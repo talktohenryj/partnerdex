@@ -31,8 +31,9 @@ import { RuleButton, type RuleOption } from './RuleButton';
  * The people behind the stores, and the saved lists over them.
  *
  * One table, many lists. "All contacts" is every person in scope with the
- * hygiene filter (Show). An audience is a rule — one app, store statuses,
- * roles — resolved live on the server, with suppressed, unconfirmed, and
+ * hygiene filter (Show). Setting a Store status or Role rule there filters the
+ * table in place; "Save audience" keeps those rules as a new tab. An audience
+ * is resolved live on the server, with suppressed, unconfirmed, and
  * status-less people moved to "Left out" and each person counted once.
  *
  * Search runs on the server: the list is the send-list, and finding one person
@@ -553,7 +554,7 @@ function Pager({
 
 /* ------------------------------------------------------------------ page */
 
-type Mode = 'all' | 'draft' | 'saved' | 'loading';
+type Mode = 'all' | 'saved' | 'loading';
 
 export function Contacts({
   appId: initialAppId,
@@ -561,7 +562,7 @@ export function Contacts({
   apps,
 }: {
   appId: string;
-  /** '' = All contacts, 'new' = an unsaved audience, otherwise an audience id. */
+  /** '' = All contacts, otherwise a saved audience id. */
   listId: string;
   apps: AppSummary[];
 }) {
@@ -585,8 +586,11 @@ export function Contacts({
 
   // Audiences.
   const [audiences, setAudiences] = useState<SavedAudienceSummary[] | null>(null);
-  const [draft, setDraft] = useState<AudienceDefinition | null>(null);
-  const [draftSaved, setDraftSaved] = useState(false);
+  // Store status / Role rules on All contacts. Empty means "Any".
+  const [rules, setRules] = useState<{ statuses: CustomerStatus[]; roles: ContactRole[] }>({
+    statuses: [],
+    roles: [],
+  });
   const [working, setWorking] = useState<AudienceDefinition | null>(null);
   const [workingFor, setWorkingFor] = useState<string | null>(null);
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
@@ -632,25 +636,16 @@ export function Contacts({
     };
   }, [reloadTick]);
 
-  const saved =
-    listId && listId !== 'new' ? audiences?.find((audience) => audience.id === listId) : undefined;
+  const saved = listId ? audiences?.find((audience) => audience.id === listId) : undefined;
   let mode: Mode = 'all';
-  if (listId === 'new') mode = 'draft';
-  else if (listId) mode = audiences === null ? 'loading' : saved ? 'saved' : 'all';
+  if (listId) mode = audiences === null ? 'loading' : saved ? 'saved' : 'all';
 
   // An unknown id falls back to All contacts.
   useEffect(() => {
-    if (listId && listId !== 'new' && audiences !== null && !saved) {
+    if (listId && audiences !== null && !saved) {
       window.location.replace('#/contacts');
     }
   }, [listId, audiences, saved]);
-
-  // Opening #/contacts/new cold (a reload) starts from paying + every role.
-  useEffect(() => {
-    if (mode === 'draft' && !draft && defaultAppId) {
-      setDraft({ appId: defaultAppId, statuses: ['paying'], roles: [...ROLES] });
-    }
-  }, [mode, draft, defaultAppId]);
 
   // A saved audience is edited on a working copy until "Save changes".
   if (mode === 'saved' && saved && workingFor !== saved.id) {
@@ -662,23 +657,27 @@ export function Contacts({
     setWorking(null);
   }
 
-  const definition = mode === 'draft' ? draft : mode === 'saved' ? working : null;
+  // All contacts with a Store status or Role rule set is resolved like an
+  // audience, so what the table shows is exactly what "Save audience" keeps.
+  // An unset rule means every value.
+  const hasRules = rules.statuses.length > 0 || rules.roles.length > 0;
+  const allDefinition: AudienceDefinition | null =
+    hasRules && defaultAppId
+      ? canonical({
+          appId: defaultAppId,
+          statuses: rules.statuses.length > 0 ? rules.statuses : [...STATUSES],
+          roles: rules.roles.length > 0 ? rules.roles : [...ROLES],
+        })
+      : null;
+
+  const definition = mode === 'saved' ? working : mode === 'all' ? allDefinition : null;
+  const filtered = definition !== null;
   const dirty = mode === 'saved' && saved ? !sameDefinition(working, saved.definition) : false;
 
-  const setDefinition = (next: AudienceDefinition) => {
-    const clean = canonical(next);
-    if (mode === 'draft') setDraft(clean);
-    else setWorking(clean);
-  };
-
-  // A saved draft is dropped once the URL has moved to its new id; dropping it
-  // sooner would let the cold-start effect above recreate it on #/contacts/new.
+  // The Show filter and the audience rules do not mix.
   useEffect(() => {
-    if (draftSaved && listId !== 'new') {
-      setDraft(null);
-      setDraftSaved(false);
-    }
-  }, [draftSaved, listId]);
+    if (hasRules) setLinked('all');
+  }, [hasRules]);
 
   // Leaving a list closes its inline forms.
   useEffect(() => {
@@ -696,7 +695,7 @@ export function Contacts({
   /* ---- All contacts */
 
   useEffect(() => {
-    if (mode !== 'all') return;
+    if (mode !== 'all' || filtered) return;
     let cancelled = false;
     setLoading(true);
     fetchContacts({
@@ -723,7 +722,7 @@ export function Contacts({
     return () => {
       cancelled = true;
     };
-  }, [mode, debounced, linked, sort, page, allAppId, reloadTick]);
+  }, [mode, filtered, debounced, linked, sort, page, allAppId, reloadTick]);
 
   /* ---- Audience preview, 300 ms after the last rule or search change */
 
@@ -774,20 +773,38 @@ export function Contacts({
 
   /* ---- Actions */
 
-  const startAudience = (next: Partial<AudienceDefinition>) => {
-    if (!defaultAppId) return;
-    setDraft(
-      canonical({
-        appId: defaultAppId,
-        statuses: next.statuses ?? [...STATUSES],
-        roles: next.roles ?? [...ROLES],
-      }),
-    );
-    window.location.hash = '#/contacts/new';
+  const setStatuses = (next: CustomerStatus[]) => {
+    if (mode === 'saved') {
+      if (working && next.length > 0) setWorking(canonical({ ...working, statuses: next }));
+    } else {
+      setRules((current) => ({ ...current, statuses: next }));
+    }
+  };
+
+  const setRoles = (next: ContactRole[]) => {
+    if (mode === 'saved') {
+      if (working && next.length > 0) setWorking(canonical({ ...working, roles: next }));
+    } else {
+      setRules((current) => ({ ...current, roles: next }));
+    }
+  };
+
+  const setApp = (appId: string) => {
+    if (mode === 'saved') {
+      if (working && appId) setWorking({ ...working, appId });
+    } else {
+      setAllAppId(appId);
+    }
+  };
+
+  const clearRules = () => {
+    setRules({ statuses: [], roles: [] });
+    if (mode === 'saved') window.location.hash = '#/contacts';
   };
 
   const showAll = (filter: ContactLinkedFilter) => {
     if (definition) setAllAppId(definition.appId);
+    setRules({ statuses: [], roles: [] });
     setLinked(filter);
     window.location.hash = '#/contacts';
   };
@@ -800,13 +817,13 @@ export function Contacts({
       .finally(() => setActionBusy(false));
   };
 
-  const saveDraft = () =>
+  const saveNew = () =>
     run(async () => {
-      if (!draft) return;
-      const created = await createAudience(nameInput.trim(), draft);
+      if (!allDefinition) return;
+      const created = await createAudience(nameInput.trim(), allDefinition);
       await loadAudiences();
       setNaming(null);
-      setDraftSaved(true);
+      setRules({ statuses: [], roles: [] });
       window.location.hash = `#/contacts/${encodeURIComponent(created.id)}`;
     });
 
@@ -907,131 +924,91 @@ export function Contacts({
     </div>
   );
 
-  const allBar = (
-    <div className="cv-bar">
-      {searchBox}
-      <div className="cv-filters">
-        <RuleButton
-          label="Show"
-          value={LINKED_FILTERS.find((item) => item.value === linked)?.label ?? 'All'}
-          isSet={linked !== 'all'}
-          heading="Show"
-          multiple={false}
-          options={LINKED_FILTERS.map((item) => ({
-            value: item.value,
-            label: item.label,
-            count: item.value === 'all' ? totals.all : totals[item.value],
-          }))}
-          selected={[linked]}
-          onChange={(next) => setLinked((next[0] ?? 'all') as ContactLinkedFilter)}
-        />
-        <RuleButton
-          label="Store status"
-          value="Any"
-          isSet={false}
-          heading={`Store status in ${appName(defaultAppId)} — starts an audience`}
-          options={statusOptions()}
-          selected={[]}
-          onChange={(next) => startAudience({ statuses: next as CustomerStatus[] })}
-        />
-        <RuleButton
-          label="Role"
-          value="Any"
-          isSet={false}
-          heading="Role — starts an audience"
-          options={roleOptions()}
-          selected={[]}
-          onChange={(next) => startAudience({ roles: next as ContactRole[] })}
-        />
-        {showAppRule ? (
-          <RuleButton
-            label="App"
-            value={allAppId ? appName(allAppId) : 'All apps'}
-            isSet={allAppId !== ''}
-            heading="App"
-            multiple={false}
-            options={[{ value: '', label: 'All apps in scope' }, ...appOptions]}
-            selected={[allAppId]}
-            onChange={(next) => setAllAppId(next[0] ?? '')}
-          />
-        ) : null}
-      </div>
-      <div className="aud-actions">
-        <button type="button" className="aud-secondary" disabled={exporting} onClick={exportAll}>
-          {exporting ? 'Exporting…' : 'Export CSV'}
-        </button>
-      </div>
-    </div>
-  );
+  const statusSelected = mode === 'saved' ? working?.statuses ?? [] : rules.statuses;
+  const roleSelected = mode === 'saved' ? working?.roles ?? [] : rules.roles;
+  const barAppId = definition ? definition.appId : allAppId;
 
-  const audienceBar = definition ? (
+  const ruleBar = (
     <div className="cv-bar">
       {searchBox}
       <div className="cv-filters">
+        {mode === 'all' && !filtered ? (
+          <RuleButton
+            label="Show"
+            value={LINKED_FILTERS.find((item) => item.value === linked)?.label ?? 'All'}
+            isSet={linked !== 'all'}
+            heading="Show"
+            multiple={false}
+            options={LINKED_FILTERS.map((item) => ({
+              value: item.value,
+              label: item.label,
+              count: item.value === 'all' ? totals.all : totals[item.value],
+            }))}
+            selected={[linked]}
+            onChange={(next) => setLinked((next[0] ?? 'all') as ContactLinkedFilter)}
+          />
+        ) : null}
         <RuleButton
           label="Store status"
-          value={ruleValue(definition.statuses, STATUSES, (s) => STATUS_LABEL[s as CustomerStatus])}
-          isSet
-          heading={`Store status in ${appName(definition.appId)}`}
-          options={statusOptions(preview?.optionCounts.statuses)}
-          selected={definition.statuses}
-          onChange={(next) => {
-            if (next.length > 0) setDefinition({ ...definition, statuses: next as CustomerStatus[] });
-          }}
+          value={ruleValue(statusSelected, STATUSES, (s) => STATUS_LABEL[s as CustomerStatus])}
+          isSet={statusSelected.length > 0}
+          heading={`Store status in ${appName(definition?.appId ?? defaultAppId)}`}
+          options={statusOptions(filtered ? preview?.optionCounts.statuses : undefined)}
+          selected={statusSelected}
+          onChange={(next) => setStatuses(next as CustomerStatus[])}
         />
         <RuleButton
           label="Role"
-          value={ruleValue(definition.roles, ROLES, (r) => ROLE_LABEL[r] ?? r)}
-          isSet
+          value={ruleValue(roleSelected, ROLES, (r) => ROLE_LABEL[r] ?? r)}
+          isSet={roleSelected.length > 0}
           heading="Role at the store"
-          options={roleOptions(preview?.optionCounts.roles)}
-          selected={definition.roles}
-          onChange={(next) => {
-            if (next.length > 0) setDefinition({ ...definition, roles: next as ContactRole[] });
-          }}
+          options={roleOptions(filtered ? preview?.optionCounts.roles : undefined)}
+          selected={roleSelected}
+          onChange={(next) => setRoles(next as ContactRole[])}
         />
         {showAppRule ? (
           <RuleButton
             label="App"
-            value={appName(definition.appId)}
-            isSet={false}
+            value={barAppId ? appName(barAppId) : 'All apps'}
+            isSet={mode === 'all' && allAppId !== ''}
             heading="App"
             multiple={false}
-            options={appOptions}
-            selected={[definition.appId]}
-            onChange={(next) => {
-              if (next[0]) setDefinition({ ...definition, appId: next[0] });
-            }}
+            options={
+              filtered ? appOptions : [{ value: '', label: 'All apps in scope' }, ...appOptions]
+            }
+            selected={[barAppId]}
+            onChange={(next) => setApp(next[0] ?? '')}
           />
         ) : null}
-        <button
-          type="button"
-          className="link-button cv-clear"
-          onClick={() => {
-            if (mode === 'draft') setDraft(null);
-            window.location.hash = '#/contacts';
-          }}
-        >
-          Clear rules
-        </button>
+        {filtered ? (
+          <button type="button" className="link-button cv-clear" onClick={clearRules}>
+            Clear rules
+          </button>
+        ) : null}
       </div>
       <div className="aud-actions">
-        <a
-          className="aud-secondary"
-          href={audienceExportUrl(
-            saved && !dirty ? { id: saved.id } : { definition: canonical(definition) },
-          )}
-          download
-        >
-          Export CSV
-        </a>
-        {mode === 'draft' ? (
-          naming === 'save' ? (
+        {filtered && definition ? (
+          <a
+            className="aud-secondary"
+            href={audienceExportUrl(
+              saved && !dirty ? { id: saved.id } : { definition: canonical(definition) },
+            )}
+            download
+          >
+            Export CSV
+          </a>
+        ) : (
+          <button type="button" className="aud-secondary" disabled={exporting} onClick={exportAll}>
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+        )}
+        {mode === 'all' ? (
+          naming === 'save' && filtered ? (
             <form
               className="aud-name-form"
               onSubmit={(event) => {
                 event.preventDefault();
-                saveDraft();
+                saveNew();
               }}
             >
               <input
@@ -1054,6 +1031,8 @@ export function Contacts({
             <button
               type="button"
               className="primary"
+              disabled={!filtered}
+              title={filtered ? undefined : 'Pick a store status or a role first'}
               onClick={() => {
                 setNameInput('');
                 setNaming('save');
@@ -1121,7 +1100,7 @@ export function Contacts({
         ) : null}
       </div>
     </div>
-  ) : null;
+  );
 
   const savedPanel =
     mode === 'saved' && saved && (naming === 'rename' || confirmDelete) ? (
@@ -1174,8 +1153,6 @@ export function Contacts({
       listId={mode === 'all' ? '' : listId}
       allCount={allCount}
       audiences={audiences ?? []}
-      draftOpen={mode === 'draft' || draft !== null}
-      onNew={() => startAudience({ statuses: ['paying'], roles: [...ROLES] })}
     />
   );
 
@@ -1188,7 +1165,7 @@ export function Contacts({
     );
   }
 
-  if (mode !== 'all') {
+  if (mode === 'saved' || filtered) {
     const excludedTotal = preview
       ? preview.excluded.suppressed + preview.excluded.ambiguous + preview.excluded.noStatus
       : 0;
@@ -1210,13 +1187,7 @@ export function Contacts({
             </p>
           </div>
         ) : null}
-        {!definition ? (
-          <div className="notice">
-            <h2>No app to build an audience on</h2>
-            <p>An audience needs an app in scope. Run a sync, then reload.</p>
-          </div>
-        ) : null}
-        {audienceBar}
+        {ruleBar}
         {savedPanel}
         {actionError ? (
           <div className="notice error">
@@ -1360,7 +1331,7 @@ export function Contacts({
   return (
     <>
       {tabs}
-      {allBar}
+      {ruleBar}
 
       {error ? (
         <div className="notice error">
