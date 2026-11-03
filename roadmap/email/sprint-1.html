@@ -16,38 +16,17 @@ table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
 .tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
 th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
 tr:last-child td{border-bottom:0}
-code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px;overflow-wrap:anywhere}
 pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
 .chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
 .todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
 ol.build>li{margin:0 0 14px}ol.build b{display:block}
 .note{border-left:3px solid var(--brand);padding:6px 12px;background:var(--brand-soft);border-radius:0 8px 8px 0}
-.mock{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px;margin:12px 0}
-.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-.mtile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.mtile .l{font-size:12px;color:var(--muted)}.mtile .v{font-size:20px;font-weight:600}
-.mtile .d{font-size:12px;color:var(--ok)}
-.pill{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:12px;margin-right:4px}
-.pill.on{border-color:var(--brand);color:var(--brand)}
-
-.mock .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
-.mock label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
-.mock .in{border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:var(--bg);font-size:14px;min-width:200px}
-.mock .ta{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg);font-size:14px;white-space:pre-wrap;font-family:inherit}
-.btn{display:inline-block;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink)}
-.btn.p{background:var(--brand);border-color:var(--brand);color:#fff}
-.btn.x{background:#b42318;border-color:#b42318;color:#fff}
-.cb{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;margin:0 6px 6px 0}
-.cb.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600}
-.cb i{width:12px;height:12px;border:1.5px solid currentColor;border-radius:3px;display:inline-block}
-.cb.on i{background:currentColor}
-.mtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-4px 0 12px}
-.mtabs span{padding:6px 12px;font-size:13px;color:var(--muted)}.mtabs span.on{color:var(--brand);border-bottom:2px solid var(--brand);font-weight:600}
-.warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
-.split{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:14px}
-@media (max-width:720px){.split{grid-template-columns:1fr}}
-.envelope{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg);font-size:14px}
-.envelope .h{font-size:12px;color:var(--muted)}
-.foot{font-size:12px;color:var(--muted);border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
+.mockbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.mockbar button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;padding:4px 10px;cursor:pointer}
+.mockbar button[aria-pressed="true"]{border-color:var(--brand);color:var(--brand);background:var(--brand-soft);font-weight:600}
+.mockframe{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--code)}
+.mockframe iframe{display:block;border:0;width:1280px;transform-origin:0 0}
 .tiny{font-size:12px;color:var(--muted)}
 </style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html" class="on">S1 · Audiences</a><a href="sprint-2.html">S2 · Compose + send</a><a href="sprint-3.html">S3 · Delivery + history</a><a href="sprint-4.html">S4 · Lifecycle (open)</a></nav><main>
 <h1>Sprint 1 — Audiences</h1>
@@ -127,7 +106,7 @@ Counting <code>suppressed</code>/<code>ambiguous</code>/<code>noStatus</code> is
 The express JSON limit (<code>64kb</code>) is enough; do not raise it.</li>
 
 <li><b>Page — <code>web/src/pages.ts</code>, <code>web/src/App.tsx</code>, <code>web/src/components/Email.tsx</code> (new)</b>
-Add a <code>PageSpec</code> <code>{ id: 'email', label: 'Email', title: 'Email', kind: 'email', cards: [] }</code> placed after <code>contacts</code>; add <code>'email'</code> to the <code>kind</code> union and an <code>isEmail</code> branch in <code>App.tsx</code> beside <code>isContacts</code> (opts out of the window controls the same way). <code>Email.tsx</code> renders tabs; S1 ships only <b>Audiences</b> (S2 adds Campaigns and Settings — render the tab strip from an array so S2 appends). Audiences tab:
+Add a <code>PageSpec</code> <code>{ id: 'email', label: 'Email', title: 'Email', kind: 'email', cards: [] }</code> as a top-level item in the first <code>NAV</code> group, after Customers (<code>{ label: '', pages: [OVERVIEW, CUSTOMERS, EMAIL] }</code>), with an <code>email</code> entry in <code>ICONS</code> in <code>web/src/components/Nav.tsx</code> (see the mockup); add <code>'email'</code> to the <code>kind</code> union and an <code>isEmail</code> branch in <code>App.tsx</code> beside <code>isContacts</code> (opts out of the window controls the same way). <code>Email.tsx</code> renders tabs; S1 ships only <b>Audiences</b> (S2 adds Campaigns and Settings — render the tab strip from an array so S2 appends). Audiences tab:
 <ul>
 <li>App picker (from <code>/api/apps</code>, as other pages do) — hidden when only one app is in scope.</li>
 <li>Status checkboxes with each status's live count beside it; role checkboxes likewise. Defaults: <b>paying</b> + all three roles.</li>
@@ -179,30 +158,194 @@ Build fixtures through <code>test/helpers.ts</code> (<code>resetEnvironment</cod
 </ul>
 
 <h2>Design mockup — Audiences tab</h2>
-<div class="mock">
-<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><div><b style="font-size:18px">Email</b><div class="tiny">Message the people who use your apps.</div></div><span class="pill">App: iziGift</span></div>
-<div class="mtabs" style="margin-top:12px"><span class="on">Audiences</span><span>Campaigns</span><span>Settings</span></div>
-<div class="split">
-<div>
-<label>Store status (iziGift)</label>
-<div><span class="cb on"><i></i>Paying · 152</span><span class="cb"><i></i>Trialing · 9</span><span class="cb"><i></i>Installed (free) · 31</span><span class="cb"><i></i>Churned · 118</span><span class="cb"><i></i>Gone · 204</span></div>
-<label style="margin-top:8px">Roles</label>
-<div><span class="cb on"><i></i>Owner</span><span class="cb on"><i></i>Staff</span><span class="cb"><i></i>Collaborator</span></div>
-<div class="mgrid" style="margin-top:10px"><div class="mtile"><div class="l">Will receive</div><div class="v">171 people</div><div class="tiny">at 147 stores</div></div></div>
-<p class="tiny">14 left out — <u>9 suppressed</u> · <u>3 store match not confirmed</u> · 2 no status in this app · 11 duplicates merged</p>
-<div class="row"><span class="btn p">Save audience…</span><span class="btn">Export CSV</span></div>
+<p>Drawn with the dashboard's own styles: the rules below are copied from <code>web/src/styles.css</code> (Lumina Modern), cut down to the ones this screen uses. The rail, masthead, tab strip, stat tiles, table, and status pills are the existing components. Only the classes prefixed <code>aud-</code> and <code>check-</code> are new, and they use the existing tokens only. The font falls back to the system font here; the app loads Inter.</p>
+<div class="mockbar"><button type="button" data-theme-pick="dark" aria-pressed="true">Dark (app default)</button><button type="button" data-theme-pick="light" aria-pressed="false">Light</button><button type="button" id="mock-open">Open full size</button></div>
+<div class="mockframe" id="mock-wrap"><iframe id="mock-frame" title="Email — Audiences tab mockup" scrolling="no"></iframe></div>
+<p class="tiny">Placeholder names and illustrative numbers — not real data. Links and controls do nothing.</p>
+<h3>What the mockup pins down</h3>
+<ul>
+<li><b>Nav:</b> Email is a top-level rail item in the first group, after Customers, with an envelope icon (<code>M3.5 5.5h15v11h-15zM3.5 6l7.5 6 7.5-6</code>) added to <code>ICONS</code> in <code>web/src/components/Nav.tsx</code>.</li>
+<li><b>Tabs:</b> the existing <code>.page-tabs</code> / <code>.page-tab</code> strip from the customer page. S1 renders one tab; S2 appends Campaigns and Settings to the same array.</li>
+<li><b>Layout:</b> saved audiences on the left (fixed ~300px card), the builder on the right, the recipient sample full width below. One column under 900px.</li>
+<li><b>App picker:</b> the standard <code>.control</code> select, inside the builder card. Hidden when only one app is in scope.</li>
+<li><b>Status and role checkboxes:</b> a new <code>.check-chip</code> (a real <code>&lt;input type="checkbox"&gt;</code>, visually hidden, plus a drawn box). Status chips reuse the Customers page pills (<code>pill-paying</code>, <code>pill-trialing</code>, …) so a status reads the same colour on both pages. The number is people, with the current role selection.</li>
+<li><b>Count:</b> two <code>.stat</code> tiles in a <code>.stat-row</code> — "Will receive N people / at S stores" and "Left out X". The breakdown line under them links "suppressed" and "store match not confirmed" to the Contacts page with the matching <code>Show</code> filter.</li>
+<li><b>Buttons:</b> <code>button.primary</code> for Save audience; a plain bordered button for Export CSV.</li>
+<li><b>Saved list:</b> name, definition summary, live count. The loaded one is highlighted. A stale audience shows the amber <code>pill-ambiguous</code> styling with "App out of scope" in place of a count.</li>
+<li><b>Sample:</b> the <code>.customer-table</code> from Contacts — person (name over email), store (link to the customer page, domain under it), role, status pill.</li>
+</ul>
+<template id="mock-body"><div class="shell"><nav class="nav" aria-label="Reports"><div class="nav-head"><span class="nav-identity"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="9" fill="var(--brand)"></rect><path d="M9 7H16.5A6 6 0 0 1 16.5 19H13V25H9Z M13 10.5H16.5A2.5 2.5 0 0 1 16.5 15.5H13Z" fill="var(--brand-on)" fill-rule="evenodd"></path></svg><span class="nav-brand">PartnerDex</span></span><button type="button" class="nav-toggle" aria-expanded="true" aria-label="Collapse navigation" title="Collapse navigation"><svg viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M14 5l-6 6 6 6" fill="none" stroke-width="1.8"></path></svg></button></div><div class="nav-group"><ul><li><a href="#/overview" class="nav-link"><svg class="nav-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M3 13h4v5H3zM9 7h4v11H9zM15 10h4v8h-4z" fill="none" stroke-width="1.7"></path></svg><span class="nav-label">Overview</span></a></li><li><a href="#/customers" class="nav-link" aria-expanded="false"><svg class="nav-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M9 10a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM2.5 19a6.5 6.5 0 0 1 13 0M16 4.2a3.2 3.2 0 0 1 0 6.2M17.5 13.2A6.5 6.5 0 0 1 21 19" fill="none" stroke-width="1.7"></path></svg><span class="nav-label">Customers</span><svg class="nav-chevron" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M6 8l5 5 5-5" fill="none" stroke-width="1.8"></path></svg></a></li><li><a href="#/email" class="nav-link active" aria-current="page"><svg class="nav-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M3.5 5.5h15v11h-15zM3.5 6l7.5 6 7.5-6" fill="none" stroke-width="1.7"></path></svg><span class="nav-label">Email</span></a></li></ul></div><div class="nav-group"><div class="nav-group-label">Reports</div><ul><li><a href="#/revenue" class="nav-link"><svg class="nav-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M3 15l5-5 4 3 6-7" fill="none" stroke-width="1.7"></path></svg><span class="nav-label">Revenue</span></a></li><li><a href="#/subscriptions" class="nav-link"><svg class="nav-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M8 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 19a6 6 0 0 1 12 0M16 8h5M18.5 5.5v5" fill="none" stroke-width="1.7"></path></svg><span class="nav-label">Subscriptions</span></a></li><li><a href="#/churn" class="nav-link"><svg class="nav-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M3 6l5 5 4-3 6 7M15 15h5v-5" fill="none" stroke-width="1.7"></path></svg><span class="nav-label">Churn</span></a></li><li><a href="#/funnel" class="nav-link"><svg class="nav-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M3 4h16l-6 7v7l-4-2v-5z" fill="none" stroke-width="1.7"></path></svg><span class="nav-label">Funnel</span></a></li><li><a href="#/reviews" class="nav-link"><svg class="nav-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M11 3.2l2.5 5.1 5.6.8-4 4 .9 5.6-5-2.7-5 2.7.9-5.6-4-4 5.6-.8z" fill="none" stroke-width="1.7"></path></svg><span class="nav-label">Reviews</span></a></li></ul></div><div class="nav-group"><div class="nav-group-label">Settings</div><ul><li><a href="#/listings" class="nav-link"><svg class="nav-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M3.5 6.5h15v11h-15zM3.5 9.5h15M7 13h8M7 15.5h5" fill="none" stroke-width="1.7"></path></svg><span class="nav-label">App listings</span></a></li><li><a href="#/bigquery" class="nav-link"><svg class="nav-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M4.5 6c0-1.1 2.9-2 6.5-2s6.5.9 6.5 2-2.9 2-6.5 2-6.5-.9-6.5-2zM4.5 6v10c0 1.1 2.9 2 6.5 2s6.5-.9 6.5-2V6M4.5 11c0 1.1 2.9 2 6.5 2s6.5-.9 6.5-2" fill="none" stroke-width="1.7"></path></svg><span class="nav-label">BigQuery</span></a></li><li><a href="#/notifications" class="nav-link"><svg class="nav-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M5.5 15.5V10a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14zM9 17.5a2 2 0 0 0 4 0" fill="none" stroke-width="1.7"></path></svg><span class="nav-label">Notifications</span></a></li></ul></div></nav><main class="main">
+<header class="masthead"><div><h1>Email</h1><p class="subtitle">Message the people behind your stores, split by store status and role.</p></div>
+<button type="button" class="theme-toggle" aria-label="Switch theme"><svg viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="4" fill="none" stroke-width="1.7"></circle><path d="M11 2v2M11 18v2M2 11h2M18 11h2M4.6 4.6l1.4 1.4M16 16l1.4 1.4M17.4 4.6L16 6M6 16l-1.4 1.4" fill="none" stroke-width="1.7"></path></svg></button></header>
+<nav class="page-tabs" aria-label="Email sections"><a href="#" class="page-tab is-active" aria-current="page">Audiences</a></nav>
+<div class="aud-layout">
+<section class="card aud-saved"><h2 class="card-label">Saved audiences</h2><p class="card-subtitle">Counts are live. Click one to load it.</p><ul class="aud-saved-list"><li><button type="button" class="aud-saved-item is-active"><span class="aud-saved-text"><span class="aud-saved-name">Paying — owners + staff</span><span class="aud-saved-def">Paying · Owner, Staff</span></span><span class="aud-saved-count tabular">171</span></button></li><li><button type="button" class="aud-saved-item"><span class="aud-saved-text"><span class="aud-saved-name">Win-back — churned owners</span><span class="aud-saved-def">Churned · Owner</span></span><span class="aud-saved-count tabular">96</span></button></li><li><button type="button" class="aud-saved-item"><span class="aud-saved-text"><span class="aud-saved-name">Trialing — everyone</span><span class="aud-saved-def">Trialing · All roles</span></span><span class="aud-saved-count tabular">14</span></button></li><li><button type="button" class="aud-saved-item"><span class="aud-saved-text"><span class="aud-saved-name">Old app — paying</span><span class="aud-saved-def">Paying · All roles</span></span><span class="pill pill-ambiguous">App out of scope</span></button></li></ul></section>
+<section class="card aud-builder">
+<div class="controls aud-controls"><div class="control"><label for="aud-app">App</label><select id="aud-app"><option>iziGift</option><option>Other app</option></select></div></div>
+<div class="aud-group"><div class="aud-group-label">Store status</div><div class="aud-chips"><label class="check-chip is-on"><input type="checkbox" checked><span class="check-box" aria-hidden="true"></span><span class="pill pill-paying">Paying</span><span class="check-count">185</span></label><label class="check-chip"><input type="checkbox"><span class="check-box" aria-hidden="true"></span><span class="pill pill-trialing">Trialing</span><span class="check-count">14</span></label><label class="check-chip"><input type="checkbox"><span class="check-box" aria-hidden="true"></span><span class="pill pill-installed">Installed</span><span class="check-count">37</span></label><label class="check-chip"><input type="checkbox"><span class="check-box" aria-hidden="true"></span><span class="pill pill-churned">Churned</span><span class="check-count">131</span></label><label class="check-chip"><input type="checkbox"><span class="check-box" aria-hidden="true"></span><span class="pill pill-gone">Gone</span><span class="check-count">212</span></label></div></div>
+<div class="aud-group"><div class="aud-group-label">Roles</div><div class="aud-chips"><label class="check-chip is-on"><input type="checkbox" checked><span class="check-box" aria-hidden="true"></span><span>Owner</span><span class="check-count">124</span></label><label class="check-chip is-on"><input type="checkbox" checked><span class="check-box" aria-hidden="true"></span><span>Staff</span><span class="check-count">61</span></label><label class="check-chip"><input type="checkbox"><span class="check-box" aria-hidden="true"></span><span>Collaborator</span><span class="check-count">18</span></label></div></div>
+<div class="stat-row aud-stats">
+<div class="stat"><div class="stat-label">Will receive</div><div class="stat-value">171 people</div><div class="stat-note">at 147 stores</div></div>
+<div class="stat"><div class="stat-label">Left out</div><div class="stat-value">14</div><div class="stat-note">match the filter, but will not get it</div></div>
+
 </div>
-<div>
-<label>Saved audiences</label>
-<div class="tw"><table><tr><td><b>Paying — owners + staff</b><div class="tiny">paying · owner, staff</div></td><td>171</td></tr><tr><td><b>Win-back — churned owners</b><div class="tiny">churned · owner</div></td><td>96</td></tr><tr><td><b>Trialing — everyone</b><div class="tiny">trialing · all roles</div></td><td>14</td></tr></table></div>
+<p class="aud-leftout">14 left out — <a class="link-button" href="#">9 suppressed</a> · <a class="link-button" href="#">3 store match not confirmed</a> · 2 no status in this app · 11 duplicates merged</p>
+<div class="aud-actions"><button type="button" class="primary">Save audience…</button><button type="button" class="aud-secondary">Export CSV</button></div>
+</section>
 </div>
-</div>
-<div class="tw"><table><tr><th>Name</th><th>Email</th><th>Store</th><th>Role</th><th>Status</th></tr>
-<tr><td>Aaron Layne</td><td>aaron@peachysunday.com</td><td>Peachy Sunday</td><td>Owner</td><td>Paying</td></tr>
-<tr><td>Addison Arendt</td><td>addison@nettotableseafoods.com</td><td>Net To Table Seafoods</td><td>Staff</td><td>Paying</td></tr>
-<tr><td>Abby Bond</td><td>abby@bondbrandedgear.com</td><td>Plunkett's</td><td>Owner</td><td>Paying</td></tr>
-</table></div>
-<p class="tiny">Showing 3 of 171. Illustrative numbers and placeholder names — not real data.</p>
-</div>
+<div class="card full aud-sample"><div class="card-head"><h2 class="card-label">Who gets it</h2></div>
+<div class="table-wrap"><table class="customer-table contacts-table"><thead><tr><th>Name</th><th>Store</th><th>Role</th><th>Status</th></tr></thead><tbody><tr><td><div class="contact-person"><span class="customer-name">Jordan Placeholder</span><span class="contact-email">jordan@example-candles.com</span></div></td><td><div class="contact-person"><a class="customer-link" href="#"><span class="customer-name">Example Candles Co</span></a><span class="contact-email">example-candles.myshopify.com</span></div></td><td>Owner</td><td><span class="pill pill-paying">Paying</span></td></tr><tr><td><div class="contact-person"><span class="customer-name">Riley Sample</span><span class="contact-email">riley@sample-outdoor.com</span></div></td><td><div class="contact-person"><a class="customer-link" href="#"><span class="customer-name">Sample Outdoor</span></a><span class="contact-email">sample-outdoor.myshopify.com</span></div></td><td>Owner</td><td><span class="pill pill-paying">Paying</span></td></tr><tr><td><div class="contact-person"><span class="customer-name">Casey Demo</span><span class="contact-email">casey@demo-coffee.com</span></div></td><td><div class="contact-person"><a class="customer-link" href="#"><span class="customer-name">Demo Coffee Roasters</span></a><span class="contact-email">demo-coffee.myshopify.com</span></div></td><td>Staff</td><td><span class="pill pill-paying">Paying</span></td></tr><tr><td><div class="contact-person"><span class="customer-name">Morgan Test</span><span class="contact-email">morgan@test-apparel.com</span></div></td><td><div class="contact-person"><a class="customer-link" href="#"><span class="customer-name">Test Apparel</span></a><span class="contact-email">test-apparel.myshopify.com</span></div></td><td>Owner</td><td><span class="pill pill-paying">Paying</span></td></tr><tr><td><div class="contact-person"><span class="customer-name">Taylor Mock</span><span class="contact-email">taylor@mock-pets.com</span></div></td><td><div class="contact-person"><a class="customer-link" href="#"><span class="customer-name">Mock Pet Supply</span></a><span class="contact-email">mock-pets.myshopify.com</span></div></td><td>Staff</td><td><span class="pill pill-paying">Paying</span></td></tr></tbody></table></div>
+<p class="contact-footnote">Showing 5 of 171 (the page shows 25). Sorted by store, then email.</p></div>
+</main></div></template>
+<script type="text/plain" id="mock-css">:root { color-scheme: light; --page: #f8fafc; --surface-1: #ffffff; --surface-2: #f1f5f9; --text-primary: #0f172a; --text-secondary: #475569; --muted: #64748b; --border: #cbd5e1; --hover-wash: rgba(15, 23, 42, 0.05); --brand: #2e72d2; --brand-hover: #2560b4; --brand-on: #ffffff; --brand-accent: var(--brand); --series-1: var(--brand-accent); --series-2: #7c5ce0; --series-3: #0e9aa7; --series-4: #b87309; --grid: #e2e8f0; --axis: #cbd5e1; --good: #16a34a; --critical: #ef4444; --delta-up: #15803d; --delta-down: #dc2626; --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06); --shadow-md: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.05); }
+:root[data-theme="dark"] { color-scheme: dark; --page: #0d0d0d; --surface-1: #1a1a19; --surface-2: #262624; --text-primary: #e2e2e6; --text-secondary: #c4c6d0; --muted: #a8abb5; --border: #44474e; --hover-wash: rgba(226, 226, 230, 0.08); --brand-hover: #3b82e6; --brand-accent: #6ba3e8; --series-2: #a48bec; --series-3: #2fbecc; --series-4: #e8912a; --grid: #4a4d53; --axis: #5a5d64; --good: #22c55e; --critical: #f87171; --delta-up: #4ade80; --delta-down: #fca5a5; --shadow-sm: none; --shadow-md: none; }
+* { box-sizing: border-box; }
+body { margin: 0px; background: var(--page); color: var(--text-primary); font-family: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, .card-value, .stat-value { letter-spacing: -0.02em; font-weight: 600; }
+.shell { display: grid; grid-template-columns: 256px minmax(0px, 1fr); min-height: 100vh; }
+.nav { position: sticky; top: 0px; align-self: start; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; padding: 16px 12px; background: var(--surface-2); border-right: 1px solid var(--border); }
+.nav-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0px 6px 14px; }
+.nav-brand { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; }
+.brand-mark { display: block; flex: 0 0 auto; width: 26px; height: 26px; }
+.nav-identity { display: flex; align-items: center; gap: 9px; min-width: 0px; }
+.nav-toggle { flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px; padding: 0px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.nav-toggle:hover { background: var(--hover-wash); }
+.nav-toggle svg { width: 16px; height: 16px; stroke: currentcolor; stroke-linecap: round; stroke-linejoin: round; }
+.nav-group + .nav-group { margin-top: 16px; }
+.nav-group-label { padding: 0px 8px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.nav ul { list-style: none; margin: 0px; padding: 0px; }
+.nav-link { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; color: var(--text-secondary); font-size: 13px; text-decoration: none; white-space: nowrap; }
+.nav-link:hover { background: var(--hover-wash); color: var(--text-primary); }
+.nav-link.active { background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand-accent); font-weight: 600; }
+.nav-icon { flex: 0 0 auto; width: 18px; height: 18px; stroke: currentcolor; stroke-linecap: round; stroke-linejoin: round; }
+.nav-chevron { flex: 0 0 auto; width: 14px; height: 14px; margin-left: auto; stroke: currentcolor; stroke-linecap: round; stroke-linejoin: round; opacity: 0.55; }
+.main { min-width: 0px; max-width: 1240px; padding: 24px 20px 64px; }
+@media (max-width: 720px){.shell, .shell.collapsed { grid-template-columns: minmax(0px, 1fr); }
+.nav { position: static; height: auto; border-right-width: medium; border-right-style: none; border-right-color: currentcolor; border-bottom: 1px solid var(--border); }
+.nav-toggle { display: none; }
+.nav-group { display: flex; align-items: center; gap: 4px; }
+.nav ul { display: flex; flex-wrap: wrap; gap: 4px; }}
+.masthead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+.masthead h1 { font-size: 22px; margin: 0px; }
+.masthead .subtitle { color: var(--text-secondary); font-size: 13px; margin: 2px 0px 0px; }
+.theme-toggle { flex: 0 0 auto; display: grid; place-items: center; width: 32px; height: 32px; padding: 0px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); border-radius: 8px; cursor: pointer; }
+.theme-toggle:hover { background: var(--hover-wash); color: var(--text-primary); }
+.theme-toggle svg { width: 17px; height: 17px; stroke: currentcolor; stroke-linecap: round; stroke-linejoin: round; }
+.controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 14px 0px; margin-bottom: 20px; }
+.control { display: flex; flex-direction: column; gap: 5px; min-width: 0px; }
+.control label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.control select, .control input { font-style: inherit; font-variant: inherit; font-weight: inherit; font-stretch: inherit; line-height: inherit; font-family: inherit; font-optical-sizing: inherit; font-size-adjust: inherit; font-kerning: inherit; font-feature-settings: inherit; font-variation-settings: inherit; font-language-override: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; min-width: 150px; }
+.control select:focus-visible, .control input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; border-color: var(--brand); }
+.card { display: flex; flex-direction: column; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-md); padding: 14px 16px 10px; min-width: 0px; }
+.card.full { grid-column: 1 / -1; }
+.main > .card { margin-bottom: 16px; }
+.card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.card-label { margin: 0px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.card-subtitle { margin: 3px 0px 0px; min-height: 3em; font-size: 12px; color: var(--muted); }
+.table-wrap { overflow-x: auto; margin-bottom: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+thead th { color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
+.customer-table td { vertical-align: middle; }
+.customer-link { display: flex; flex-direction: column; gap: 1px; text-decoration: none; color: inherit; }
+.customer-link:hover .customer-name { text-decoration: underline; }
+.customer-name { font-weight: 600; font-size: 13px; }
+.customer-table tbody tr:hover { background: var(--hover-wash); }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid var(--border); color: var(--text-secondary); }
+.pill-paying, .pill-sub-active { color: var(--delta-up); border-color: color-mix(in srgb, var(--delta-up) 40%, transparent); }
+.pill-trialing, .pill-sub-trialing { color: var(--brand-accent); border-color: color-mix(in srgb, var(--brand-accent) 40%, transparent); }
+.pill-churned, .pill-gone, .pill-sub-churned { color: var(--delta-down); border-color: color-mix(in srgb, var(--delta-down) 40%, transparent); }
+.page-tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.page-tab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--muted); font-weight: 500; text-decoration: none; white-space: nowrap; }
+.page-tab:hover { color: var(--text-primary); }
+.page-tab.is-active { color: var(--brand-accent); border-bottom-color: var(--brand-accent); }
+.stat-row { display: grid; grid-template-columns: repeat(4, minmax(0px, 1fr)); gap: 14px; margin-bottom: 20px; }
+@media (max-width: 900px){.stat-row { grid-template-columns: repeat(2, minmax(0px, 1fr)); }}
+.stat { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-md); padding: 14px 16px; }
+.stat-label { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+.stat-value { margin-top: 4px; font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat-note { margin-top: 2px; color: var(--muted); font-size: 11px; }
+button.primary, .channel-actions button { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; color: var(--text-primary); font-style: inherit; font-variant: inherit; font-weight: inherit; font-stretch: inherit; line-height: inherit; font-family: inherit; font-optical-sizing: inherit; font-size-adjust: inherit; font-kerning: inherit; font-feature-settings: inherit; font-variation-settings: inherit; font-language-override: inherit; font-size: 13px; cursor: pointer; }
+button.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-on); font-weight: 500; }
+button.primary:hover:not(:disabled) { background: var(--brand-hover); border-color: var(--brand-hover); }
+button.primary:focus-visible, .channel-actions button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+button.primary:disabled, .channel-actions button:disabled { opacity: 0.45; cursor: default; }
+.link-button { background: none; border: 0px; padding: 0px; font-style: inherit; font-variant: inherit; font-weight: inherit; font-stretch: inherit; line-height: inherit; font-family: inherit; font-optical-sizing: inherit; font-size-adjust: inherit; font-kerning: inherit; font-feature-settings: inherit; font-variation-settings: inherit; font-language-override: inherit; font-size: 12px; color: var(--brand-accent); cursor: pointer; text-decoration: none; }
+.link-button:hover { text-decoration: underline; }
+:root[data-theme="dark"] .review-popover { background: var(--surface-2); }
+:root[data-theme="dark"] .modal { background: var(--surface-2); }
+:root[data-theme="dark"] .modal::backdrop { background: rgba(0, 0, 0, 0.6); }
+:root { --funnel-1: #1d4f96; --funnel-2: #2560b4; --funnel-3: #2e72d2; --funnel-4: #5a94dd; --funnel-5: #8fb8e8; }
+:root[data-theme="dark"] { --funnel-1: #b5d3f5; --funnel-2: #8fb8e8; --funnel-3: #6ba3e8; --funnel-4: #4587d9; --funnel-5: #2560b4; }
+:root[data-theme="dark"] .funnel-settings-panel { background: var(--surface-2); }
+.contact-person { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.contacts-table td { vertical-align: top; }
+.contact-role, .contact-email { color: var(--muted); font-size: 11px; }
+.contact-email { overflow-wrap: anywhere; }
+.pill-ambiguous { margin-left: 6px; color: var(--warning, #8a6116); border-color: color-mix(in srgb, var(--warning, #c9a227) 40%, transparent); }
+.contact-footnote { margin: 10px 0px 0px; color: var(--muted); font-size: 11px; }
+.tabular { font-variant-numeric: tabular-nums; }
+/* New in Email S1 — built only from the existing tokens. */
+.aud-layout{display:grid;grid-template-columns:minmax(240px,300px) minmax(0,1fr);gap:16px;align-items:start;margin-bottom:16px}
+@media (max-width:900px){.aud-layout{grid-template-columns:1fr}}
+.aud-layout>.card{margin:0}
+.aud-saved-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.aud-saved-item{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;background:none;border:1px solid transparent;border-radius:8px;padding:8px 10px;font:inherit;color:var(--text-primary);cursor:pointer}
+.aud-saved-item:hover{background:var(--hover-wash)}
+.aud-saved-item.is-active{background:color-mix(in srgb,var(--brand) 14%,transparent);border-color:color-mix(in srgb,var(--brand) 40%,transparent)}
+.aud-saved-text{display:flex;flex-direction:column;min-width:0}
+.aud-saved-name{font-size:13px;font-weight:600}
+.aud-saved-def{font-size:12px;color:var(--muted)}
+.aud-saved-count{font-size:13px;font-weight:600;color:var(--text-secondary)}
+.aud-controls{margin:0 0 14px}
+.aud-group{margin:0 0 14px}
+.aud-group-label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.aud-chips{display:flex;flex-wrap:wrap;gap:8px}
+.check-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);font-size:13px;color:var(--text-primary);cursor:pointer;user-select:none}
+.check-chip input{position:absolute;opacity:0;pointer-events:none}
+.check-chip:hover{background:var(--hover-wash)}
+.check-box{width:14px;height:14px;border:1.5px solid var(--muted);border-radius:4px;flex:none;position:relative}
+.check-chip.is-on{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 12%,var(--surface-1))}
+.check-chip.is-on .check-box{background:var(--brand);border-color:var(--brand)}
+.check-chip.is-on .check-box::after{content:"";position:absolute;left:3.5px;top:0.5px;width:4px;height:8px;border:solid var(--brand-on);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.check-chip .pill{margin:0}
+.check-count{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.aud-stats{margin:4px 0 10px}
+.aud-leftout{font-size:13px;color:var(--text-secondary);margin:0 0 14px}
+.aud-leftout .link-button{font-size:13px}
+.aud-actions{display:flex;gap:10px;flex-wrap:wrap}
+.aud-secondary{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;color:var(--text-primary);font:inherit;font-size:13px;cursor:pointer}
+.aud-secondary:hover{background:var(--hover-wash)}
+.aud-sample .contact-footnote{margin-top:10px}
+.aud-sample th,.aud-sample td{text-align:left}
+</script>
+<script>
+(function(){
+  var frame=document.getElementById('mock-frame'),wrap=document.getElementById('mock-wrap');
+  var css=document.getElementById('mock-css').textContent,body=document.getElementById('mock-body').innerHTML,theme='dark';
+  function doc(){return '<!doctype html><html data-theme="'+theme+'"><head><meta charset="utf-8"><meta name="viewport" content="width=1280"><style>'+css+'</style></head><body><div id="root">'+body+'</div></body></html>';}
+  function fit(){
+    var d=frame.contentDocument;if(!d||!d.documentElement)return;
+    var h=d.documentElement.scrollHeight,s=Math.min(1,wrap.clientWidth/1280);
+    frame.style.height=h+'px';frame.style.transform='scale('+s+')';wrap.style.height=Math.ceil(h*s)+'px';
+  }
+  function render(){frame.srcdoc=doc();}
+  frame.addEventListener('load',function(){
+    var d=frame.contentDocument;d.addEventListener('click',function(e){if(e.target.closest('a,button,label'))e.preventDefault();});
+    fit();setTimeout(fit,200);
+  });
+  window.addEventListener('resize',fit);
+  document.querySelectorAll('[data-theme-pick]').forEach(function(b){b.addEventListener('click',function(){
+    theme=b.getAttribute('data-theme-pick');
+    document.querySelectorAll('[data-theme-pick]').forEach(function(x){x.setAttribute('aria-pressed',String(x===b));});
+    render();
+  });});
+  document.getElementById('mock-open').addEventListener('click',function(){
+    var url=URL.createObjectURL(new Blob([doc()],{type:'text/html'}));window.open(url,'_blank');
+  });
+  render();
+})();
+</script>
 
 </main></body></html>
