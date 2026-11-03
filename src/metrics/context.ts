@@ -37,6 +37,8 @@ function flag(raw: string | undefined, fallback: boolean, name: string): boolean
 
 export interface MetricContext {
   db: Db;
+  /** One clock for every report in the request, including forward-looking ones. */
+  now: Date;
   window: Window;
   /** Apps this request reports on, already intersected with the org scope. */
   appIds: string[];
@@ -44,7 +46,6 @@ export interface MetricContext {
   includeUsage: boolean;
   byShop: boolean;
   churnWindowDays: number;
-  planChangeWindowDays: number;
   currency: string | null;
   /** Visible buckets preceded by the hidden leading bucket. */
   bucketsWithLead: Window['buckets'];
@@ -91,6 +92,7 @@ export function currencyProfile(
 export function buildContext(query: RawMetricQuery, now?: Date): MetricContext {
   const db = getDb();
   const { runtime, scope, reporting } = getConfig();
+  const current = now ?? new Date();
 
   const inScope = resolveScopedAppIds(db);
   let appIds = inScope;
@@ -119,7 +121,7 @@ export function buildContext(query: RawMetricQuery, now?: Date): MetricContext {
     interval: query.interval,
     timeZone: runtime.timezone,
     allTimeStart: scope.syncStartDate,
-    now,
+    now: current,
   });
 
   const asOf: AsOfOptions = {
@@ -132,13 +134,13 @@ export function buildContext(query: RawMetricQuery, now?: Date): MetricContext {
 
   return {
     db,
+    now: current,
     window,
     appIds,
     asOf,
     includeUsage: flag(query.includeUsage, reporting.includeUsage, 'includeUsage'),
     byShop: flag(query.byShop, reporting.byShop, 'byShop'),
     churnWindowDays: reporting.churnWindowDays,
-    planChangeWindowDays: reporting.planChangeWindowDays,
     currency,
     bucketsWithLead: [window.leading, ...window.buckets],
     rating: ratingFilter(query.rating),

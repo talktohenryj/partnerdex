@@ -1,5 +1,5 @@
 import type { Db } from '../db/index.js';
-import { monthlyAmountFor } from './derive.js';
+import { monthlyAmountFor, PLAN_CHANGE_WINDOW_SECONDS } from './derive.js';
 
 /**
  * Raw feed -> clean customer lifecycle events (customer-events spec 3).
@@ -79,6 +79,11 @@ const NON_PAYING_STATES = new Set<string>([
   'unsubscribed',
   'subscription_frozen',
   'deactivated',
+  // A charge the merchant walked away from is over. Omitting these left the
+  // fold believing the install was still on a live subscription, which is what
+  // made the *next* activation read as a plan change instead of a return.
+  'trial_abandoned',
+  'charge_abandoned',
 ]);
 
 /**
@@ -186,6 +191,20 @@ function derivedEventId(sub: SubRow, kind: string, at: string): string {
   return `${sub.app_id}|${sub.shop_id}|${kind}|${at}|${sub.charge_id}`;
 }
 
+/**
+ * A conversion is named by its charge alone, because its date is provisional.
+ *
+ * A charge converts at most once, but *when* is a best estimate until the first
+ * sale settles: before then it is the billing date, and once the sale lands in
+ * a payout batch it is the sale's date, often a fortnight later. Stamping that
+ * date into the id made every correction a new event, and the notifier — whose
+ * ledger is keyed on the id — announced the same conversion twice. Migration 3
+ * carries conversions already announced under the dated id across to this one.
+ */
+function conversionEventId(sub: SubRow): string {
+  return `${sub.app_id}|${sub.shop_id}|derived:trial_converted|${sub.charge_id}`;
+}
+
 /** Unrecognized raw types are collected and reported, never thrown on. */
 const unknownTypes = new Set<string>();
 
@@ -210,6 +229,23 @@ function contributionAt(sub: SubRow | undefined, at: string): number {
   const gate =
     sub.trial_status === 'none' && sub.activated_at ? sub.activated_at : sub.conversion_at;
   return gate <= at ? sub.monthly_amount : 0;
+}
+
+/**
+ * Did another charge on this install activate within the plan-change window
+ * after `cancel` (spec §4.a)? `derive.ts` has already decided the cancel is a
+ * plan change; this only tells its §4.a half, where the merchant moved onto a
+ * new plan, from §4.b's re-emit.
+ */
+function movedOnFrom(items: TimelineItem[], cancel: RawEventRow): boolean {
+  const from = Date.parse(cancel.occurred_at);
+  return items.some(({ raw }) => {
+    if (raw?.type !== 'SUBSCRIPTION_CHARGE_ACTIVATED' || raw.charge_id === cancel.charge_id) {
+      return false;
+    }
+    const gap = Date.parse(raw.occurred_at) - from;
+    return gap >= 0 && gap < PLAN_CHANGE_WINDOW_SECONDS * 1000;
+  });
 }
 
 function foldInstall(items: TimelineItem[], out: CleanEvent[]): void {
@@ -258,10 +294,17 @@ function foldInstall(items: TimelineItem[], out: CleanEvent[]): void {
         // when the install has already moved on to another charge, because then
         // this subscription is no longer the one earning.
         const applies = currentCharge === sub.charge_id;
-        const credited = contributionAt(sub, item.at);
+        // A trial can convert while the charge is frozen: the shop was paused
+        // mid-trial and the settlement lands afterwards. The freeze has already
+        // taken this subscription's MRR to nothing, so crediting the conversion
+        // would hand back revenue that is not being billed — and the ledger
+        // would then disagree with `asOfPredicate`, which reads the freeze. The
+        // money is not lost, only deferred: `subscription_unfrozen` books it if
+        // and when the shop comes back.
+        const credited = currentState === 'subscription_frozen' ? 0 : contributionAt(sub, item.at);
         out.push({
           ...base,
-          event_id: derivedEventId(sub, item.kind, item.at),
+          event_id: conversionEventId(sub),
           type: 'trial_converted',
           net_change: applies ? credited - currentAmount : 0,
         });
@@ -381,6 +424,40 @@ function foldInstall(items: TimelineItem[], out: CleanEvent[]): void {
       case 'SUBSCRIPTION_CHARGE_CANCELED':
       case 'SUBSCRIPTION_CHARGE_EXPIRED':
       case 'SUBSCRIPTION_CHARGE_DECLINED': {
+        // The row is kept either way. Suppressed events are filtered out of
+        // every default read, so the audit trail survives without the churn
+        // number ever seeing them.
+        const suppress = (reason: string) =>
+          push('unsubscribed', {
+            suppressed: 1,
+            plan_amount: planAmount,
+            net_change: 0,
+            detail: JSON.stringify({ suppressedAs: reason }),
+          });
+
+        // A plan change is a plan change whether or not the old charge had been
+        // paid for yet (spec §4.a, §6.4). A merchant who moves tier mid-trial
+        // cancels a charge nothing has settled on, and this check used to sit
+        // below the abandonment branch, which never reached it: the move was
+        // announced as a cancelled trial, the state was released, and the new
+        // charge read as a return — "Trial cancelled" then "Trial restarted" for
+        // one upgrade. Holding the state here is what lets the activation that
+        // follows take the plan-change branch.
+        //
+        // Only when the install really was on this charge and really did move
+        // onto another. `is_plan_change` also covers §4.b's re-emit, which says
+        // nothing about where the merchant went; an unpaid charge flagged for
+        // that alone is still an abandonment, and holding the state on it would
+        // leave the install subscribed to a charge that is gone.
+        if (
+          sub?.is_plan_change === 1 &&
+          currentCharge === raw.charge_id &&
+          movedOnFrom(items, raw)
+        ) {
+          suppress('plan_change');
+          break;
+        }
+
         // A charge that never reached a paid state was abandoned, not churned:
         // there is no revenue to lose. Expiries are back-dated to where the
         // merchant actually stopped, clamped to their first interaction.
@@ -408,10 +485,24 @@ function foldInstall(items: TimelineItem[], out: CleanEvent[]): void {
               sub.trial_ends_at &&
               at < sub.trial_ends_at,
           );
-          push(duringTrial ? 'trial_abandoned' : 'charge_abandoned', {
-            occurred_at: at,
-            plan_amount: planAmount,
-          });
+          const type: CustomerEventType = duringTrial ? 'trial_abandoned' : 'charge_abandoned';
+          push(type, { occurred_at: at, plan_amount: planAmount });
+
+          // An abandonment ends the subscription just as surely as a churned
+          // cancel does, so the running state has to be released here too.
+          // While it was not, a merchant who dropped a trial and signed up
+          // again was still "on" the dead charge, and the second activation
+          // took the plan-change branch below: their return was announced as an
+          // upgrade, and the charge they never paid for stayed on the books as
+          // the current one. Nothing is subtracted — an abandoned charge was
+          // contributing zero by definition (`contributionAt` gates on
+          // `conversion_at`) — so this moves no money, only the state.
+          if (currentCharge === raw.charge_id) {
+            currentAmount = 0;
+            currentPlan = 0;
+            currentCharge = '';
+            currentState = type;
+          }
           break;
         }
 
@@ -426,20 +517,8 @@ function foldInstall(items: TimelineItem[], out: CleanEvent[]): void {
         //     counting it would report a merchant as lost and upgraded at once;
         //   - an uninstall already ended the subscription earlier, and the loss
         //     is carried by the derived event at that instant instead.
-        //
-        // The row is kept either way. Suppressed events are filtered out of
-        // every default read, so the audit trail survives without the churn
-        // number ever seeing them.
         if (sub.is_plan_change === 1 || sub.churn_at !== raw.occurred_at) {
-          push('unsubscribed', {
-            suppressed: 1,
-            plan_amount: planAmount,
-            net_change: 0,
-            detail: JSON.stringify({
-              suppressedAs:
-                sub.is_plan_change === 1 ? 'plan_change' : (sub.churn_reason ?? 'not_churn'),
-            }),
-          });
+          suppress(sub.is_plan_change === 1 ? 'plan_change' : (sub.churn_reason ?? 'not_churn'));
           break;
         }
 
@@ -569,7 +648,12 @@ function derivedItems(sub: SubRow): TimelineItem[] {
   }
   // A subscription can convert without any trial at all; the money still has to
   // enter the ledger somewhere, and the activation covers that case itself.
-  if (sub.churn_reason === 'uninstalled' && sub.conversion_at) {
+  // A shop that was deactivated without its charge being frozen is gone just as
+  // finally as one that uninstalled, and the feed sends no cancel for either.
+  if (
+    (sub.churn_reason === 'uninstalled' || sub.churn_reason === 'deactivated') &&
+    sub.conversion_at
+  ) {
     add('derived:unsubscribed', sub.churn_at);
   }
   return items;

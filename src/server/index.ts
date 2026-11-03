@@ -39,6 +39,7 @@ const HEADLINE_METRICS = [
   'ltv',
   'trials',
   'on_trial',
+  'trialing',
   'trial_conversion_rate',
   'active_subscriptions',
   'subscribers',
@@ -120,7 +121,7 @@ export function createApp(): express.Express {
    * The install funnel.
    *
    * Its own route rather than a metric key, because it is not a time series: it
-   * is five steps wide and every column carries a conversion against the one
+   * is several steps wide and every column carries a conversion against the one
    * before it, which the single-value metric response has nowhere to put. It
    * still resolves its window through the same ladder and caches in the same
    * table, so there remains exactly one implementation of each figure.

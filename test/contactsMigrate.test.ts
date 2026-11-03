@@ -8,7 +8,7 @@ import {
   restoreContactsFromFile,
 } from '../src/contacts/dump.js';
 import { closeDb, getDb, type Db } from '../src/db/index.js';
-import { migrate, readUserVersion, type Migration } from '../src/db/migrate.js';
+import { MIGRATIONS, migrate, readUserVersion, type Migration } from '../src/db/migrate.js';
 import { resetEnvironment } from './helpers.js';
 
 /**
@@ -17,11 +17,12 @@ import { resetEnvironment } from './helpers.js';
  * failed migration without leaving a half-applied version. The dump CLI must
  * round-trip the three Role-4 tables.
  *
- * Contacts is migration 3, not 1 — migrations 1 and 2 are the upstream
- * BigQuery/funnel column fixups, absorbed into this runner ahead of contacts
- * per the reconciliation agreed in upstream issue #2. A fresh database runs
- * all three and lands on user_version = 3.
+ * Contacts is migration 4. A fresh database runs every migration and lands
+ * on the latest version; the test migrations below take the next number.
  */
+const CONTACTS_VERSION = 4;
+const LATEST = MIGRATIONS.length;
+const NEXT = LATEST + 1;
 
 function tableNames(db: Db): Set<string> {
   const rows = db
@@ -67,23 +68,23 @@ describe('contacts migration runner', () => {
     closeDb();
   });
 
-  it('creates the three contacts tables and sets user_version = 3 on a fresh DB', () => {
+  it('creates the three contacts tables and sets the latest user_version on a fresh DB', () => {
     const db = getDb();
     const names = tableNames(db);
 
-    assert.equal(readUserVersion(db), 3);
+    assert.equal(readUserVersion(db), LATEST);
     assert.ok(names.has('contacts'));
     assert.ok(names.has('contact_shops'));
     assert.ok(names.has('contact_suppressions'));
 
-    // Index from migration 3 is present.
+    // Index from the contacts migration is present.
     const indexes = db
       .prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_contact_shops_shop'`)
       .all();
     assert.equal(indexes.length, 1);
   });
 
-  it('runs zero migrations on a DB already at user_version = 3 and leaves data untouched', () => {
+  it('runs zero migrations on a DB already at the latest version and leaves data untouched', () => {
     const db = getDb();
     seedContact(db);
 
@@ -91,7 +92,7 @@ describe('contacts migration runner', () => {
     assert.equal(before.n, 2);
 
     migrate(db); // no-op
-    assert.equal(readUserVersion(db), 3);
+    assert.equal(readUserVersion(db), LATEST);
 
     const after = db
       .prepare(`SELECT email, first_name FROM contacts ORDER BY email`)
@@ -102,43 +103,56 @@ describe('contacts migration runner', () => {
     ]);
   });
 
-  it('applies a deliberately-added migration 4 exactly once on next open', () => {
+  it('replays from version 2 onto a DB that already holds contacts and keeps them', () => {
     const db = getDb();
-    assert.equal(readUserVersion(db), 3);
+    seedContact(db);
+    assert.ok(MIGRATIONS.some((migration) => migration.version === CONTACTS_VERSION));
 
-    const migration4: Migration = {
-      version: 4,
+    db.pragma('user_version = 2');
+    migrate(db);
+    assert.equal(readUserVersion(db), LATEST);
+
+    const count = db.prepare(`SELECT COUNT(*) AS n FROM contacts`).get() as { n: number };
+    assert.equal(count.n, 2);
+  });
+
+  it('applies a deliberately-added next migration exactly once on next open', () => {
+    const db = getDb();
+    assert.equal(readUserVersion(db), LATEST);
+
+    const nextMigration: Migration = {
+      version: NEXT,
       up: (d) => {
         d.exec(`ALTER TABLE contacts ADD COLUMN company TEXT`);
       },
     };
 
-    migrate(db, [migration4]);
-    assert.equal(readUserVersion(db), 4);
+    migrate(db, [nextMigration]);
+    assert.equal(readUserVersion(db), NEXT);
 
     const cols = db.prepare(`PRAGMA table_info(contacts)`).all() as Array<{ name: string }>;
     assert.ok(cols.some((col) => col.name === 'company'));
 
     // Second call is a no-op — proves IF NOT EXISTS would have been insufficient
     // for evolving an existing durable table, and that the runner is idempotent.
-    migrate(db, [migration4]);
-    assert.equal(readUserVersion(db), 4);
+    migrate(db, [nextMigration]);
+    assert.equal(readUserVersion(db), NEXT);
   });
 
   it('rolls back a throwing migration and leaves user_version unchanged', () => {
     const db = getDb();
     seedContact(db);
-    assert.equal(readUserVersion(db), 3);
+    assert.equal(readUserVersion(db), LATEST);
 
     const boom: Migration = {
-      version: 4,
+      version: NEXT,
       up: () => {
         throw new Error('intentional migration failure');
       },
     };
 
     assert.throws(() => migrate(db, [boom]), /intentional migration failure/);
-    assert.equal(readUserVersion(db), 3);
+    assert.equal(readUserVersion(db), LATEST);
 
     // Pre-existing durable data survived the failed migration.
     const count = db.prepare(`SELECT COUNT(*) AS n FROM contacts`).get() as { n: number };
@@ -147,10 +161,10 @@ describe('contacts migration runner', () => {
 
   it('rolls back schema changes from a migration that fails mid-up', () => {
     const db = getDb();
-    assert.equal(readUserVersion(db), 3);
+    assert.equal(readUserVersion(db), LATEST);
 
     const boom: Migration = {
-      version: 4,
+      version: NEXT,
       up: (d) => {
         d.exec(`ALTER TABLE contacts ADD COLUMN scratch TEXT`);
         throw new Error('fail after alter');
@@ -158,7 +172,7 @@ describe('contacts migration runner', () => {
     };
 
     assert.throws(() => migrate(db, [boom]), /fail after alter/);
-    assert.equal(readUserVersion(db), 3);
+    assert.equal(readUserVersion(db), LATEST);
 
     const cols = db.prepare(`PRAGMA table_info(contacts)`).all() as Array<{ name: string }>;
     assert.equal(
