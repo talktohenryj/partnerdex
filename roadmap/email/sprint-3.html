@@ -51,7 +51,8 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 .tiny{font-size:12px;color:var(--muted)}
 </style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Audiences</a><a href="sprint-2.html">S2 · Compose + send</a><a href="sprint-3.html" class="on">S3 · Delivery + history</a><a href="sprint-4.html">S4 · Lifecycle (open)</a></nav><main>
 <h1>Sprint 3 — Delivery + history</h1>
-<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · branch <code>email/s3-delivery</code> off <code>email-upstream</code> · no migration (columns shipped in 5)</p>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · branch <code>email/s3-delivery</code> off <code>email-upstream</code> · no migration (columns shipped in 6)</p>
+<p class="note"><b>Before implementing:</b> this page scrolls sideways on a phone (867px wide at a 390px screen). The cause is the long inline <code>GET /api/email/campaigns/:id/recipients?filter=…</code> path, which does not wrap. Fix the page first — <code>code{overflow-wrap:anywhere}</code>, as S1 has — and check it at 390px.</p>
 
 <h2>Why this ships now</h2>
 <p>After S2, PartnerDex knows what it handed to Resend, not what happened next. A hard bounce or a spam complaint is recorded only inside Resend, so the Contacts page still shows that person as sendable, and the next audience still counts them. Henry also cannot answer "did anyone click?" or "what did we last send this merchant?". This sprint brings Resend's delivery events back into <code>email_sends</code> and the suppression store, and shows them per campaign and per person.</p>
