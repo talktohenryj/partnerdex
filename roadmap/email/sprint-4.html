@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Email — S4 · Lifecycle (open)</title><style>
+<title>Email — S4 · Delivery + history</title><style>
 :root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
 --ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
@@ -49,61 +49,106 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 .envelope .h{font-size:12px;color:var(--muted)}
 .foot{font-size:12px;color:var(--muted);border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
 .tiny{font-size:12px;color:var(--muted)}
-</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Audiences</a><a href="sprint-2.html">S2 · Compose + send</a><a href="sprint-3.html">S3 · Delivery + history</a><a href="sprint-4.html" class="on">S4 · Lifecycle (open)</a></nav><main>
-<h1>Sprint 4 — Lifecycle email (v2/v3)</h1>
-<p class="sub"><span class="chip open">Not designed</span> · repo: partnerdex · open questions only</p>
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Audiences</a><a href="sprint-2.html">S2 · Identify + attributes</a><a href="sprint-3.html">S3 · Compose + send</a><a href="sprint-4.html" class="on">S4 · Delivery</a><a href="sprint-5.html">S5 · App messages</a><a href="sprint-6.html">S6 · Scheduled (open)</a><a href="sprint-7.html">S7 · Settings (open)</a><a href="sprint-8.html">S8 · Styling (open)</a><a href="sprint-9.html">S9 · Flows (open)</a></nav><main>
+<h1>Sprint 4 — Delivery + history</h1>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · branch <code>email/s3-delivery</code> off <code>email-upstream</code> · no migration (columns shipped in 7)</p>
+<p class="note"><b>Before implementing:</b> this page scrolls sideways on a phone (867px wide at a 390px screen). The cause is the long inline <code>GET /api/email/campaigns/:id/recipients?filter=…</code> path, which does not wrap. Fix the page first — <code>code{overflow-wrap:anywhere}</code>, as S1 has — and check it at 390px.</p>
 
-<div class="note">Henry, 2026-10-09: "No lifecycle for v1. That can be a v2 or 3." This page is <b>not</b> a Build list. It holds the questions that must be answered before anyone builds automated email, so they are not lost and not invented later.</div>
+<h2>Why this ships now</h2>
+<p>After S3, PartnerDex knows what it handed to Resend, not what happened next. A hard bounce or a spam complaint is recorded only inside Resend, so the Contacts page still shows that person as sendable, and the next audience still counts them. Henry also cannot answer "did anyone click?" or "what did we last send this merchant?". This sprint brings Resend's delivery events back into <code>email_sends</code> and the suppression store, and shows them per campaign and per person.</p>
 
-<h2>What "lifecycle" means here</h2>
-<p>An email that sends itself to one person when a condition becomes true for them — not a broadcast Henry presses Send on. Candidate triggers raised on 2026-10-09:</p>
+<h2>Why this is independently deployable</h2>
+<p>A new public webhook route and new reads. Nothing in S3's send path changes. With <code>RESEND_WEBHOOK_SECRET</code> unset the route answers 503 and the campaign page shows sent counts only — exactly S3. Writes into existing state are limited to <code>suppressContact()</code> with the already-allowed <code>'resend_webhook'</code> source.</p>
+
+<h2>Build</h2>
+<ol class="build">
+<li><b>Config — <code>src/config.ts</code></b>
+<code>email.resendWebhookSecret</code> from <code>RESEND_WEBHOOK_SECRET</code> (the <code>whsec_…</code> value Resend shows when you add the endpoint). Add to <code>.env.example</code> and <code>resetEnvironment()</code>.</li>
+
+<li><b>Signature check — <code>src/email/webhook.ts</code> (new)</b>
+<code>verifyResendSignature(rawBody: Buffer, headers, secret): boolean</code>. Resend signs with Svix: key = base64-decode of the secret after <code>whsec_</code>; signed content = <code>svix-id + "." + svix-timestamp + "." + rawBody</code>; HMAC-SHA256, base64; <code>svix-signature</code> holds space-separated <code>v1,&lt;sig&gt;</code> entries — accept if any matches (<code>timingSafeEqual</code>). Reject when <code>|now − svix-timestamp| &gt; 300 s</code>. No dependency.</li>
+
+<li><b>Event handler — <code>src/email/webhook.ts</code> <code>applyResendEvent(event, db)</code></b>
+Look up <code>email_sends</code> by <code>resend_id = event.data.email_id</code>. Not found → ignore (test sends, or other senders on the same Resend account). Stamps use <code>COALESCE(col, @at)</code> so the first event wins and redelivery is harmless.
 <div class="tw"><table>
-<tr><th>Trigger</th><th>Data PartnerDex has today</th><th>Gap</th></tr>
-<tr><td>Trial started / trial ending</td><td><code>subscriptions.trial_status</code>, <code>trial_started_at</code>, <code>trial_ends_at</code></td><td>Trial end date per (app, shop) must be reliable to the day</td></tr>
-<tr><td>Paying but inactive (no login in N days)</td><td><code>contact_shops.last_seen_at</code> (dashboard logins via iziGift capture)</td><td>"Login" is not "using the app". Usage Metrics (fork roadmap) would give a better signal</td></tr>
-<tr><td>Uninstalled / churned (win-back)</td><td><code>customer_events</code> uninstall / subscription-cancel events, already used by Slack notifications</td><td>Timing (same day feels like spam; 14 days?) and whether to email at all after an uninstall</td></tr>
-<tr><td>New person logs in for the first time</td><td><code>contacts.created_at</code> from live capture</td><td>Mantle-imported people have no real first-seen date</td></tr>
-</table></div>
+<tr><th>Resend type</th><th>Write</th></tr>
+<tr><td><code>email.delivered</code></td><td><code>delivered_at</code></td></tr>
+<tr><td><code>email.bounced</code></td><td><code>bounced_at</code>; if <code>data.bounce.type</code> is <code>Permanent</code> (hard): <code>suppressContact(email, { source: 'resend_webhook', reason: 'hard bounce' })</code>. Transient/undetermined: stamp only.</td></tr>
+<tr><td><code>email.complained</code></td><td><code>complained_at</code> + <code>unsubscribeAllMarketing(email, 'complaint')</code> (S3) — every marketing type off; Account notices still allowed. Not a suppression.</td></tr>
+<tr><td><code>email.opened</code></td><td><code>opened_at</code> (first)</td></tr>
+<tr><td><code>email.clicked</code></td><td><code>clicked_at</code> (first)</td></tr>
+<tr><td>anything else (<code>email.sent</code>, <code>email.delivery_delayed</code>, …)</td><td>ignored, 200</td></tr>
+</table></div></li>
 
-<h2>Open questions (each changes schema or API shape)</h2>
-<ol>
-<li><b>Trigger source.</b> Hang triggers off the existing seams — the sync's <code>onSyncComplete</code> listener and <code>customer_events</code> (the way <code>src/notifications/dispatch.ts</code> already finds new events for Slack) — or evaluate conditions on a clock ("every hour, who is now 5 days into a trial")? Event-driven reuses notifications; clock-driven is the only way to do "no login for 30 days".</li>
-<li><b>One send per person per trigger, ever?</b> Needs an <code>email_automation_sends(automation_id, email, shop_id, sent_at)</code> uniqueness rule. What resets it — a reinstall, a new trial?</li>
-<li><b>Frequency cap across everything.</b> If a person qualifies for a broadcast and two automations in one week, who wins? A global "max N emails per person per 7 days" needs a check inside the S2 runner too.</li>
-<li><b>Sequences or single emails?</b> "Day 1, day 3, day 6" is a sequence with exit conditions (they paid → stop). That is a much bigger model than single triggered emails. Recommendation: v2 = single emails only.</li>
-<li><b>Quiet hours / time zone.</b> Shops have no reliable time zone in PartnerDex. Send in <code>REPORTING_TIMEZONE</code> business hours?</li>
-<li><b>Consent for automated email to staff and collaborators.</b> Broadcasts let Henry choose roles each time. An automation runs unattended — should it default to owners only?</li>
-<li><b>Kill switch.</b> One toggle that pauses all automations (and is it per automation as well)?</li>
-<li><b>Upstream fit.</b> Is automation generic enough to go upstream, or fork-only?</li>
+<li><b>Webhook route — <code>src/server/index.ts</code></b>
+The global <code>app.use(express.json({ limit: '64kb' }))</code> consumes the body, and the signature needs the raw bytes. Register <code>app.post('/api/email/webhooks/resend', express.raw({ type: 'application/json', limit: '256kb' }), resendWebhookHandler)</code> <b>before</b> that <code>express.json</code> line and before <code>requireAuth</code>. Handler: 503 if no secret; 401 if the signature fails; parse JSON; <code>applyResendEvent</code>; 200. Errors after a valid signature still return 200 and log (Resend retries non-2xx, and a poison event must not retry forever). Add the endpoint in Resend → Webhooks with the five event types above.</li>
+
+<li><b>Campaign report — <code>src/email/campaigns.ts</code> + routes</b>
+<code>getCampaign(id)</code> gains <code>stats: { sent, delivered, opened, clicked, bounced, complained, unsubscribed, failed, skipped }</code> (counts of non-null columns / statuses) and <code>rates</code> over <code>delivered</code> (open, click, unsubscribe) and over <code>sent</code> (bounce). New: <code>GET /api/email/campaigns/:id/recipients?filter=all|delivered|opened|clicked|bounced|complained|unsubscribed|failed|skipped&amp;q=&amp;limit=50&amp;offset=0</code> → rows with name, email, store, status, and the event times. <code>POST /api/email/campaigns/:id/retry-failed</code> → failed rows back to <code>queued</code> (new batch keys), campaign back to <code>sending</code>; only for <code>sent|failed</code> campaigns, and only after a type-the-count confirm in the UI.</li>
+
+<li><b>Per-person history — <code>src/email/history.ts</code> + route</b>
+<code>emailHistory(email, db)</code> → <code>[{ campaignId, name, subject, sentAt, status, deliveredAt, openedAt, clickedAt, bouncedAt, complainedAt, unsubscribedAt }]</code>, newest first, joined from <code>email_sends</code> → <code>email_campaigns</code>. Route on <code>emailRouter()</code>: <code>GET /api/email/contacts/:email/history</code> (kept on the email router so the contacts router stays as it is upstream).</li>
+
+<li><b>UI</b>
+<ul>
+<li><b>Campaign page</b> (<code>EmailCampaigns.tsx</code>): stat tiles (Sent, Delivered, Opened ≈, Clicked, Bounced, Unsubscribed), "Opens are approximate" note, filter chips over the recipients table, "Retry N failed".</li>
+<li><b>Contacts page</b> (<code>web/src/components/Contacts.tsx</code>): new "Last email" column (campaign name + a small status) from a batched read: add <code>lastEmailFor(emails[])</code> beside <code>emailHistory()</code> and serve it from <code>GET /api/email/contacts/last?emails=…</code> for the visible page only. Clicking it opens a popover with the full history.</li>
+<li><b>Customer page Contacts tab</b> (<code>web/src/components/CustomerContacts.tsx</code>): same "Last email" column.</li>
+<li>Suppression source labels: <code>resend_webhook</code> shows the reason ("hard bounce" / "spam complaint").</li>
+</ul></li>
+
+<li><b>Tests — <code>test/emailWebhook.test.ts</code>, extend <code>test/emailSend.test.ts</code></b> (cases below). Sign fixture payloads with a test secret in the test itself.</li>
 </ol>
 
-<h2>What v1 already gives v2</h2>
+<h2>Acceptance</h2>
+<div class="tw"><table>
+<tr><th>Scenario</th><th>Expected</th></tr>
+<tr><td>No <code>RESEND_WEBHOOK_SECRET</code>; Resend posts an event</td><td>503; nothing written</td></tr>
+<tr><td>Bad or missing signature / timestamp 10 min old</td><td>401; nothing written</td></tr>
+<tr><td><code>email.delivered</code> for a known <code>resend_id</code></td><td><code>delivered_at</code> set; posting it again leaves the first time</td></tr>
+<tr><td><code>email.bounced</code>, type Permanent</td><td><code>bounced_at</code> set; contact suppressed, source <code>resend_webhook</code>, reason "hard bounce"; next S1 preview counts them as suppressed</td></tr>
+<tr><td><code>email.bounced</code>, type Transient</td><td><code>bounced_at</code> set; not suppressed</td></tr>
+<tr><td><code>email.complained</code></td><td>Stamp; every marketing email type off; the contact is not suppressed, so Account notices still reach them</td></tr>
+<tr><td>Event for an unknown <code>email_id</code> (a test send)</td><td>200; nothing written</td></tr>
+<tr><td>Valid signature, handler throws</td><td>200 + log line (no retry storm)</td></tr>
+<tr><td>Campaign with 171 sent, 165 delivered, 40 clicked</td><td>Report shows click rate 24.2% (over delivered)</td></tr>
+<tr><td>Retry failed on a campaign with 3 failed</td><td>Requires typing 3; those rows re-queued with new batch keys; others untouched</td></tr>
+<tr><td>Contact who got 2 campaigns</td><td>History lists both, newest first; Contacts row shows the newest</td></tr>
+</table></div>
+
+<h2>Tests (named)</h2>
 <ul>
-<li>The audience resolver (S1) — an automation's "who" is the same definition plus a trigger.</li>
-<li>The renderer, transport, unsubscribe, and runner (S2) — an automation enqueues <code>email_sends</code> rows under a campaign-like parent and the same runner sends them.</li>
-<li>Delivery events and suppression (S3) — unchanged.</li>
+<li><code>webhook disabled without secret</code> · <code>rejects bad signature</code> · <code>rejects old timestamp</code> · <code>accepts any matching v1 signature</code></li>
+<li><code>delivered stamps once</code> · <code>hard bounce suppresses</code> · <code>soft bounce does not suppress</code> · <code>complaint turns off marketing types only</code> · <code>unknown email id ignored</code> · <code>handler error still returns 200</code></li>
+<li><code>campaign stats and rates</code> · <code>recipients filter by event</code> · <code>retry failed requeues only failed rows</code> · <code>history newest first</code> · <code>last email for a page of contacts</code></li>
 </ul>
 
-<h2>Final vision</h2>
-<p>After v1 (S1–S3) and a v2 lifecycle layer: one Email section in PartnerDex where every message to a merchant — broadcast or automatic — is chosen by store status and role, sent from Henry's own address, honours every unsubscribe and bounce in one suppression store, and shows up on that person's contact row next to their store's MRR.</p>
+<h2>Explicitly NOT in this sprint</h2>
+<ul>
+<li>Per-link click breakdown, heatmaps, A/B tests.</li>
+<li>Pulling events by polling the Resend API (webhook only).</li>
+<li>Lifecycle / automation — S9.</li>
+<li>Unsuppressing a bounced address automatically — a human does it on the Contacts page.</li>
+</ul>
+
+<h2>Design mockup — campaign report</h2>
 <div class="mock">
-<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><div><b style="font-size:18px">Email</b><div class="tiny">Message the people who use your apps.</div></div><span class="pill">App: iziGift</span></div>
-<div class="mtabs" style="margin-top:12px"><span class="on">Campaigns</span><span>Automations <span class="chip open">v2</span></span><span>Settings</span></div>
-<div class="tw"><table><tr><th>Campaign</th><th>Audience</th><th>Status</th><th>Sent</th><th>Clicked</th></tr>
-<tr><td><b>3 gift card ideas for Q4</b></td><td>Paying · Owner, Staff</td><td><span class="chip done">Sent</span></td><td>171</td><td>24%</td></tr>
-<tr><td><b>Quick question about how you use iziGift</b></td><td>Paying · Owner</td><td><span class="chip todo">Sending</span></td><td>62 / 140</td><td>—</td></tr>
-<tr><td><b>We fixed the thing you asked about</b></td><td>Churned · Owner</td><td><span class="chip open">Draft</span></td><td>—</td><td>—</td></tr>
-</table></div>
-<div class="split" style="margin-top:12px">
-<div class="card" style="margin:0"><b>Automations (v2)</b>
-<div class="tiny" style="margin-top:6px">Trial day 5 — "Your trial ends soon" · <span class="chip done">On</span> · 12 sent this month</div>
-<div class="tiny">Paying, no login 30 days — "Need a hand?" · <span class="chip open">Paused</span></div>
-<div class="tiny">Churned + 14 days — win-back · <span class="chip open">Off</span></div></div>
-<div class="card" style="margin:0"><b>Aaron Layne</b> <span class="tiny">· Peachy Sunday · Owner · $39 MRR</span>
-<div class="tiny" style="margin-top:6px">Oct 14 — 3 gift card ideas for Q4 · delivered · clicked</div>
-<div class="tiny">Sep 2 — Trial day 5 (automation) · delivered</div></div>
+<div class="mtabs"><span class="on">Campaigns</span><span>Settings</span></div>
+<b style="font-size:17px">3 gift card ideas for Q4</b> <span class="chip done">Sent</span> <span class="tiny">· Oct 14, 9:02 AM · iziGift · Paying · Owner, Staff</span>
+<div class="mgrid" style="margin-top:10px">
+<div class="mtile"><div class="l">Sent</div><div class="v">171</div></div>
+<div class="mtile"><div class="l">Delivered</div><div class="v">165</div><div class="tiny">96.5%</div></div>
+<div class="mtile"><div class="l">Opened ≈</div><div class="v">88</div><div class="tiny">53% · approximate</div></div>
+<div class="mtile"><div class="l">Clicked</div><div class="v">40</div><div class="tiny">24.2%</div></div>
+<div class="mtile"><div class="l">Bounced</div><div class="v">6</div><div class="tiny">4 hard → suppressed</div></div>
+<div class="mtile"><div class="l">Unsubscribed</div><div class="v">3</div><div class="tiny">1.8%</div></div>
 </div>
-<p class="tiny">Illustrative — the Automations tab is v2 and not designed.</p>
+<div class="row"><span class="pill on">All</span><span class="pill">Clicked</span><span class="pill">Opened</span><span class="pill">Bounced</span><span class="pill">Unsubscribed</span><span class="pill">Failed</span></div>
+<div class="tw"><table><tr><th>Name</th><th>Store</th><th>Status</th><th>Clicked</th></tr>
+<tr><td>Aaron Layne</td><td>Peachy Sunday</td><td>Delivered · opened</td><td>Oct 14, 9:40 AM</td></tr>
+<tr><td>Addison Arendt</td><td>Net To Table Seafoods</td><td>Delivered</td><td>—</td></tr>
+<tr><td>Abby Bond</td><td>Plunkett's</td><td>Bounced (hard) · suppressed</td><td>—</td></tr></table></div>
+<p class="tiny">Illustrative numbers — not real data.</p>
 </div>
 
 </main></body></html>

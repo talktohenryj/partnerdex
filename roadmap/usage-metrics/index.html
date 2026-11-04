@@ -34,12 +34,13 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 
 <div class="note">An app pushes <b>usage events</b> (for iziGift: one <code>order</code> event per paid order, with <code>usdOrderTotal</code>, <code>usdUpsellRevenue</code>, …). PartnerDex stores them raw. Henry then defines <b>usage metrics</b> in the dashboard — "Total Revenue = sum of <code>usdOrderTotal</code> on <code>order</code>" — and every customer page shows those metrics over a chosen window. Same model as Mantle, but the data lives next to MRR, churn and contacts in one SQLite file.</div>
 
+<p class="note"><b>Link to Email (2026-11-04).</b> Usage Metrics now comes after Email S5. The weekly recap ships first through Email S5, with iziGift computing the numbers itself, so it does not wait for this roadmap. Email S6 (Scheduled emails) then needs three things from here: (1) more iziGift events in S2 — gift card redeemed, gift card sold, cashback issued, cashback redeemed (S2 lists them as later); (2) a window that ends in the past, for "the 4 weeks before this week" (S3 has only windows that end now); (3) S1 ingest accepts the same <code>shop</code> block as <code>POST /api/identify</code> (Email S2), so apps send one shop shape everywhere. Usage events keep their own endpoint, because they add up over time instead of replacing a value.</p>
 <h2>Status board</h2>
 <div class="tw"><table>
 <tr><th>Sprint</th><th>What ships</th><th>Repo</th><th>Status</th></tr>
-<tr><td><a href="sprint-1.html">S1 · Ingest + raw events</a></td><td><code>usage_events</code> table (migration 7), <code>POST /api/usage/ingest</code>, raw "Usage events" page</td><td>partnerdex</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-1.html">S1 · Ingest + raw events</a></td><td><code>usage_events</code> table (migration 9), <code>POST /api/usage/ingest</code>, raw "Usage events" page</td><td>partnerdex</td><td><span class="chip todo">Not started</span></td></tr>
 <tr><td><a href="sprint-2.html">S2 · iziGift producer</a></td><td>Dual-write the Mantle <code>order</code> event to PartnerDex + a backfill command</td><td>iziGift-shopify</td><td><span class="chip todo">Not started</span></td></tr>
-<tr><td><a href="sprint-3.html">S3 · Metric definitions</a></td><td><code>usage_metrics</code> table (migration 8), CRUD API, "Usage metrics" settings page with live preview</td><td>partnerdex</td><td><span class="chip todo">Not started</span></td></tr>
+<tr><td><a href="sprint-3.html">S3 · Metric definitions</a></td><td><code>usage_metrics</code> table (migration 10), CRUD API, "Usage metrics" settings page with live preview</td><td>partnerdex</td><td><span class="chip todo">Not started</span></td></tr>
 <tr><td><a href="sprint-4.html">S4 · Customer page</a></td><td>"Usage" card on the customer page, window picker, values per metric</td><td>partnerdex</td><td><span class="chip todo">Not started</span></td></tr>
 <tr><td><a href="sprint-5.html">S5 · Reports</a></td><td>Leaderboard, customer-list column, metric over time — open questions only</td><td>partnerdex</td><td><span class="chip open">Not designed</span></td></tr>
 </table></div>
@@ -63,7 +64,7 @@ S2 and S3 run in parallel once S1 is live.</pre>
 <tr><td>Bearer-token machine ingest, mounted ahead of <code>requireAuth</code></td><td><code>src/server/contacts.ts</code> <code>requireIngestToken</code>, <code>bearerMatches</code>; mount at <code>src/server/index.ts:105</code></td><td>S1</td></tr>
 <tr><td>Shop resolution by <code>shopId</code> or <code>myshopifyDomain</code></td><td><code>resolveShopMatch()</code> + <code>normalizeDomain()</code> in <code>src/contacts/upsert.ts:57,102</code></td><td>S1</td></tr>
 <tr><td>App-in-scope guard</td><td><code>assertAppInScope()</code> in <code>src/contacts/upsert.ts:67</code></td><td>S1</td></tr>
-<tr><td>Versioned durable schema</td><td><code>MIGRATIONS</code> in <code>src/db/migrate.ts</code> (1–3 upstream; 4 contacts; 5–6 Email)</td><td>S1 (v7), S3 (v8)</td></tr>
+<tr><td>Versioned durable schema</td><td><code>MIGRATIONS</code> in <code>src/db/migrate.ts</code> (1–3 upstream; 4 contacts; 5–8 Email)</td><td>S1 (v9), S3 (v10)</td></tr>
 <tr><td>Error envelope</td><td><code>sendError()</code> in <code>src/server/errors.ts</code></td><td>S1, S3, S4</td></tr>
 <tr><td>Page registry + nav</td><td><code>web/src/pages.ts</code> (<code>PageSpec</code>, <code>kind</code>, <code>children</code>)</td><td>S1, S3</td></tr>
 <tr><td>Customer page tabs</td><td><code>web/src/components/CustomerDetail.tsx:581</code> (<code>page-tabs</code>)</td><td>S4</td></tr>
@@ -102,7 +103,7 @@ S2 and S3 run in parallel once S1 is live.</pre>
 <h2>Open questions (decide before the named sprint)</h2>
 <div class="tw"><table>
 <tr><th>#</th><th>Question</th><th>Default if no answer</th><th>Blocks</th></tr>
-<tr><td>Q1</td><td>Migration numbers 7 and 8: Email holds 5 and 6, and upstream may add more. Check upstream <code>main</code> and the Email roadmap first (fork <code>CLAUDE.md</code> rule)</td><td>Check upstream before S1 merges; renumber if taken</td><td>S1</td></tr>
+<tr><td>Q1</td><td>Migration numbers 9 and 10: Email holds 5 to 8, and upstream may add more. Check upstream <code>main</code> and the Email roadmap first (fork <code>CLAUDE.md</code> rule)</td><td>Check upstream before S1 merges; renumber if taken</td><td>S1</td></tr>
 <tr><td>Q2</td><td>Is iziGift's <code>shopify_id</code> the same number as the Partner API shop gid tail?</td><td>Send <code>myshopifyDomain</code> only; resolve by domain</td><td>S1, S2</td></tr>
 <tr><td>Q3</td><td>Keep the Mantle usage events running after S4, or turn them off?</td><td>Keep both until S4 has run for 30 days</td><td>S2</td></tr>
 <tr><td>Q4</td><td>Upstream this to Aditya, or fork-only?</td><td>Fork-only; nothing iziGift-specific is in PartnerDex code, so it can go up later</td><td>none</td></tr>

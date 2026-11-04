@@ -40,8 +40,9 @@ column, and the undated trial conversion ids. Contacts are migration 4, on
 this fork's `main` and on `contacts-upstream` (upstream PR #14). They are not
 upstream yet.
 
-Planned numbers: Email S1 = 5, Email S2 = 6, Usage Metrics S1 = 7, Usage
-Metrics S3 = 8.
+Email S1 (audiences) is migration 5, built on this fork's `main`. Planned
+numbers: Email S2 (identify + custom attributes) = 6, Email S3 (compose + send)
+= 7, Email S5 (app messages) = 8, Usage Metrics S1 = 9, Usage Metrics S3 = 10.
 
 Each migration number belongs to one migration. If two branches both add "the
 next" number, a database already at that version skips the second one with no

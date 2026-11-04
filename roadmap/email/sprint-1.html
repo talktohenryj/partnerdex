@@ -29,15 +29,15 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 .mockframe{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--code)}
 .mockframe iframe{display:block;border:0;width:1280px;transform-origin:0 0}
 .tiny{font-size:12px;color:var(--muted)}
-</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html" class="on">S1 · Audiences</a><a href="sprint-2.html">S2 · Compose + send</a><a href="sprint-3.html">S3 · Delivery + history</a><a href="sprint-4.html">S4 · Lifecycle (open)</a></nav><main>
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html" class="on">S1 · Audiences</a><a href="sprint-2.html">S2 · Identify + attributes</a><a href="sprint-3.html">S3 · Compose + send</a><a href="sprint-4.html">S4 · Delivery</a><a href="sprint-5.html">S5 · App messages</a><a href="sprint-6.html">S6 · Scheduled (open)</a><a href="sprint-7.html">S7 · Settings (open)</a><a href="sprint-8.html">S8 · Styling (open)</a><a href="sprint-9.html">S9 · Flows (open)</a></nav><main>
 <h1>Sprint 1 — Audiences</h1>
 <p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · branch off <code>email-upstream</code> · migration 5 (see <a href="index.html">Q1</a>)</p>
 
 <h2>Why this ships now</h2>
-<p>The split is the hard, valuable half. Today the only filters on people are hygiene filters (<code>ContactLinkedFilter</code> in <code>src/contacts/list.ts</code>), and the store status that decides who should hear what lives privately inside <code>src/customers/index.ts</code> (<code>statusOf()</code>). This sprint joins the two on the Contacts page itself: next to "All contacts", Henry saves audiences — pick an app, the store statuses, and the roles, and see exactly who that is, with suppression, unlinked, and ambiguous people moved to "left out" and each person counted once. An audience is a collection of contacts, so it lives where the contacts live, in the same table with the same columns. The Email page arrives with the first send (S2).</p>
+<p>The split is the hard, valuable half. Today the only filters on people are hygiene filters (<code>ContactLinkedFilter</code> in <code>src/contacts/list.ts</code>), and the store status that decides who should hear what lives privately inside <code>src/customers/index.ts</code> (<code>statusOf()</code>). This sprint joins the two on the Contacts page itself: next to "All contacts", Henry saves audiences — pick an app, the store statuses, and the roles, and see exactly who that is, with suppression, unlinked, and ambiguous people moved to "left out" and each person counted once. An audience is a collection of contacts, so it lives where the contacts live, in the same table with the same columns. The Email page arrives with the first send (S3).</p>
 
 <h2>Why this is independently deployable</h2>
-<p>One migration (5) that only creates a table, one router behind <code>requireAuth</code>, and a reworked Contacts page whose <b>All contacts</b> tab keeps today's list, search, Show filter, sorting, paging, Suppress and Resolve. The edits to existing code: extract the per-shop status query in <code>src/customers/index.ts</code> into an exported helper that the Customers list keeps using unchanged; export <code>sortShops</code> from <code>src/contacts/list.ts</code>; add a <code>status</code> field to each store on <code>GET /api/contacts</code> (additive — old callers ignore it). If S2 never ships, Henry still gets counted, deduped, suppression-clean audiences he can export as CSV and paste into any sender.</p>
+<p>One migration (5) that only creates a table, one router behind <code>requireAuth</code>, and a reworked Contacts page whose <b>All contacts</b> tab keeps today's list, search, Show filter, sorting, paging, Suppress and Resolve. The edits to existing code: extract the per-shop status query in <code>src/customers/index.ts</code> into an exported helper that the Customers list keeps using unchanged; export <code>sortShops</code> from <code>src/contacts/list.ts</code>; add a <code>status</code> field to each store on <code>GET /api/contacts</code> (additive — old callers ignore it). If S3 never ships, Henry still gets counted, deduped, suppression-clean audiences he can export as CSV and paste into any sender.</p>
 
 <h2>Build</h2>
 <ol class="build">
@@ -121,7 +121,7 @@ Counting is per <i>person</i>: <code>excluded.suppressed</code> / <code>ambiguou
 The express JSON limit (<code>64kb</code>) is enough; do not raise it.</li>
 
 <li><b>Page — <code>web/src/components/Contacts.tsx</code> (reworked), <code>ContactLists.tsx</code>, <code>RuleButton.tsx</code> (new), <code>web/src/App.tsx</code></b>
-No new page, no rail change: the Email page and its rail item arrive in S2. The Contacts page becomes saved lists over one table (see the mockup, both states).
+No new page, no rail change: the Email page and its rail item arrive in S3. The Contacts page becomes saved lists over one table (see the mockup, both states).
 <ul>
 <li><b>Routing.</b> <code>App.tsx</code> passes <code>route.param</code> to <code>&lt;Contacts&gt;</code> as <code>listId</code>: <code>#/contacts</code> = All contacts (the page always opens here), <code>#/contacts/&lt;audienceId&gt;</code> = a saved audience. An unknown id falls back to All contacts. Rules that are not saved live in component state only, not in the URL.</li>
 <li><b>List tabs — <code>ContactLists.tsx</code>.</b> The <code>.page-tabs</code> strip from the customer page, under the masthead: <b>All contacts</b> (count = <code>totals.all</code>), then each saved audience from <code>GET /api/audiences</code> with its live count, oldest first. Nothing else: no "New audience" tab and no add button — the only way to make a tab is <b>Save audience…</b>. A stale audience shows an amber "App out of scope" pill in place of its count.</li>
@@ -183,7 +183,7 @@ Build fixtures through <code>test/helpers.ts</code> (<code>resetEnvironment</cod
 
 <h2>Explicitly NOT in this sprint</h2>
 <ul>
-<li>Any send, transport, Resend client, or settings — S2. That includes the Email page and its rail item.</li>
+<li>Any send, transport, Resend client, or settings — S3. That includes the Email page and its rail item.</li>
 <li>MRR / plan / login-recency / usage filters — out of v1.</li>
 <li>Multi-app audiences.</li>
 <li>Rules beyond store status and role (plan, MRR, last seen, tags) — the rule bar is built so they can be added later as more <code>RuleButton</code>s.</li>

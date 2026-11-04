@@ -30,7 +30,7 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 .pill.on{border-color:var(--brand);color:var(--brand)}
 </style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Ingest</a><a href="sprint-2.html">S2 · iziGift producer</a><a href="sprint-3.html" class="on">S3 · Metric definitions</a><a href="sprint-4.html">S4 · Customer page</a><a href="sprint-5.html">S5 · Reports (open)</a></nav><main>
 <h1>Sprint 3 — Usage metric definitions</h1>
-<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · migration 8</p>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · migration 10</p>
 
 <h2>Why this ships now</h2>
 <p>Raw events answer "what happened". Henry wants named numbers: Total Revenue, Total Orders, Upsell Revenue, GC Dollars Redeemed. Mantle does this with a definition — name, event, count or sum of a property. Without that layer, every number is still a hand-written query.</p>
@@ -40,7 +40,7 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 
 <h2>Build</h2>
 <ol class="build">
-<li><b>Migration 8 — <code>src/db/migrate.ts</code></b>
+<li><b>Migration 10 — <code>src/db/migrate.ts</code></b>
 <pre>CREATE TABLE IF NOT EXISTS usage_metrics (
   id               TEXT PRIMARY KEY,          -- crypto.randomUUID()
   app_id           TEXT NOT NULL,
@@ -112,7 +112,7 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 <li><code>rejects a property name with a quote or path characters</code></li>
 <li><code>preview works on an unsaved definition</code></li>
 <li><code>seed is idempotent</code></li>
-<li><code>migration 8 creates usage_metrics</code> (sequence 1–8)</li>
+<li><code>migration 10 creates usage_metrics</code> (sequence 1–10)</li>
 </ul>
 
 </main></body></html>

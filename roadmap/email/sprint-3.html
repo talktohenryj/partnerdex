@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Email — S3 · Delivery + history</title><style>
+<title>Email — S3 · Compose + send</title><style>
 :root{--bg:#f6f6f7;--card:#fff;--ink:#1a1a1a;--muted:#5c5f62;--line:#e1e3e5;--brand:#c05621;--brand-soft:#fff4ec;
 --ok:#1f7a4d;--ok-soft:#e3f5ec;--warn:#8a6100;--warn-soft:#fff5d6;--info:#1f5199;--info-soft:#e6efff;--code:#f1f2f4}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;
@@ -49,106 +49,445 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 .envelope .h{font-size:12px;color:var(--muted)}
 .foot{font-size:12px;color:var(--muted);border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
 .tiny{font-size:12px;color:var(--muted)}
-</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Audiences</a><a href="sprint-2.html">S2 · Compose + send</a><a href="sprint-3.html" class="on">S3 · Delivery + history</a><a href="sprint-4.html">S4 · Lifecycle (open)</a></nav><main>
-<h1>Sprint 3 — Delivery + history</h1>
-<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · branch <code>email/s3-delivery</code> off <code>email-upstream</code> · no migration (columns shipped in 6)</p>
-<p class="note"><b>Before implementing:</b> this page scrolls sideways on a phone (867px wide at a 390px screen). The cause is the long inline <code>GET /api/email/campaigns/:id/recipients?filter=…</code> path, which does not wrap. Fix the page first — <code>code{overflow-wrap:anywhere}</code>, as S1 has — and check it at 390px.</p>
+.mockbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.mockbar button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;padding:4px 10px;cursor:pointer}
+.mockbar button[aria-pressed="true"]{border-color:var(--brand);color:var(--brand);background:var(--brand-soft);font-weight:600}
+.mockframe{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--code)}
+</style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html">S1 · Audiences</a><a href="sprint-2.html">S2 · Identify + attributes</a><a href="sprint-3.html" class="on">S3 · Compose + send</a><a href="sprint-4.html">S4 · Delivery</a><a href="sprint-5.html">S5 · App messages</a><a href="sprint-6.html">S6 · Scheduled (open)</a><a href="sprint-7.html">S7 · Settings (open)</a><a href="sprint-8.html">S8 · Styling (open)</a><a href="sprint-9.html">S9 · Flows (open)</a></nav><main>
+<h1>Sprint 3 — Compose + send</h1>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · branch <code>email/s2-send</code> off <code>email-upstream</code> · migration 7</p>
 
 <h2>Why this ships now</h2>
-<p>After S2, PartnerDex knows what it handed to Resend, not what happened next. A hard bounce or a spam complaint is recorded only inside Resend, so the Contacts page still shows that person as sendable, and the next audience still counts them. Henry also cannot answer "did anyone click?" or "what did we last send this merchant?". This sprint brings Resend's delivery events back into <code>email_sends</code> and the suppression store, and shows them per campaign and per person.</p>
+<p>S1 answers "who"; S2 says what each store is like. This sprint answers "send them this": a plain-text founder email, a test to yourself, a frozen recipient list, a type-the-count confirmation, and a resumable send through Resend with the two things the law and the inbox providers require — a working one-click unsubscribe and a postal footer. Today PartnerDex has no transport, no unsubscribe route, and no record of what was sent to whom.</p>
 
 <h2>Why this is independently deployable</h2>
-<p>A new public webhook route and new reads. Nothing in S2's send path changes. With <code>RESEND_WEBHOOK_SECRET</code> unset the route answers 503 and the campaign page shows sent counts only — exactly S2. Writes into existing state are limited to <code>suppressContact()</code> with the already-allowed <code>'resend_webhook'</code> source.</p>
+<p>New tables (migration 7), new routes, a new background loop, two new tabs. It changes no existing behaviour: unsubscribes go to the new <code>email_preferences</code> table, not to <code>suppressContact()</code>. With <code>RESEND_API_KEY</code>, <code>PUBLIC_BASE_URL</code>, or <code>EMAIL_LINK_SECRET</code> unset — or with no <code>DASHBOARD_PASSWORD</code> — Test, Prepare, and Send return 403 with the reason, the runner does not start, and the app behaves exactly as after S1. Resend itself refuses addresses on its bounce/complaint suppression list, so sending before S4 is safe; S4 only mirrors those events back.</p>
 
 <h2>Build</h2>
 <ol class="build">
 <li><b>Config — <code>src/config.ts</code></b>
-<code>email.resendWebhookSecret</code> from <code>RESEND_WEBHOOK_SECRET</code> (the <code>whsec_…</code> value Resend shows when you add the endpoint). Add to <code>.env.example</code> and <code>resetEnvironment()</code>.</li>
+Add an <code>email</code> block to the config object, beside <code>contactsIngestToken()</code>:
+<pre>email: {
+  resendApiKey: string | null,     // RESEND_API_KEY
+  publicBaseUrl: string | null,    // PUBLIC_BASE_URL, e.g. https://partnerdex.fly.dev — no trailing slash; must be https unless host is localhost
+  linkSecret: string | null,       // EMAIL_LINK_SECRET, ≥ 32 chars or ConfigError at startup
+}</pre>
+And <code>export function sendingBlockedReason(): string | null</code> in <code>src/email/guard.ts</code> (new): returns the first of "Set DASHBOARD_PASSWORD before sending email." / "Set RESEND_API_KEY…" / "Set PUBLIC_BASE_URL…" / "Set EMAIL_LINK_SECRET…" / "Fill in the sender settings…" / null. Add all three to <code>.env.example</code> and to <code>resetEnvironment()</code> in <code>test/helpers.ts</code> as <code>''</code>.</li>
 
-<li><b>Signature check — <code>src/email/webhook.ts</code> (new)</b>
-<code>verifyResendSignature(rawBody: Buffer, headers, secret): boolean</code>. Resend signs with Svix: key = base64-decode of the secret after <code>whsec_</code>; signed content = <code>svix-id + "." + svix-timestamp + "." + rawBody</code>; HMAC-SHA256, base64; <code>svix-signature</code> holds space-separated <code>v1,&lt;sig&gt;</code> entries — accept if any matches (<code>timingSafeEqual</code>). Reject when <code>|now − svix-timestamp| &gt; 300 s</code>. No dependency.</li>
+<li><b>Migration 7 — <code>src/db/migrate.ts</code></b>
+<code>EMAIL_SEND_SCHEMA_SQL</code>, <code>{ version: 7, … }</code>. All Role 4. Besides the tables below it creates <code>email_types</code> and <code>email_preferences</code> (step "Email types + preferences").
+<pre>CREATE TABLE IF NOT EXISTS email_settings (
+  id             INTEGER PRIMARY KEY CHECK (id = 1),
+  from_name      TEXT NOT NULL DEFAULT '',
+  from_email     TEXT NOT NULL DEFAULT '',
+  reply_to       TEXT NOT NULL DEFAULT '',
+  footer_address TEXT NOT NULL DEFAULT '',
+  updated_at     TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS email_campaigns (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  subject         TEXT NOT NULL DEFAULT '',
+  preview_text    TEXT NOT NULL DEFAULT '',
+  body            TEXT NOT NULL DEFAULT '',     -- light Markdown
+  audience        TEXT NOT NULL,                -- JSON AudienceDefinition (copied, not referenced)
+  audience_id     TEXT,                         -- the saved audience it was copied from, if any
+  email_type      TEXT NOT NULL DEFAULT 'product_updates', -- an email_types.key
+  status          TEXT NOT NULL DEFAULT 'draft',-- draft|ready|sending|sent|cancelled|failed
+  from_name       TEXT, from_email TEXT, reply_to TEXT, footer_address TEXT,  -- snapshot at prepare
+  recipient_count INTEGER NOT NULL DEFAULT 0,
+  sent_count      INTEGER NOT NULL DEFAULT 0,
+  failed_count    INTEGER NOT NULL DEFAULT 0,
+  skipped_count   INTEGER NOT NULL DEFAULT 0,
+  batch_seq       INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  prepared_at TEXT, started_at TEXT, finished_at TEXT
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS email_sends (
+  campaign_id     TEXT NOT NULL,
+  email           TEXT NOT NULL,
+  shop_id         TEXT NOT NULL,
+  merge           TEXT NOT NULL,                -- JSON: built-in fields + attr.* + page links, frozen at prepare
+  status          TEXT NOT NULL DEFAULT 'queued', -- queued|sending|sent|failed|skipped
+  skip_reason     TEXT,                         -- suppressed|cancelled
+  batch_key       TEXT,
+  resend_id       TEXT,
+  error           TEXT,
+  sent_at TEXT, delivered_at TEXT, opened_at TEXT, clicked_at TEXT,
+  bounced_at TEXT, complained_at TEXT, unsubscribed_at TEXT,   -- S4 fills delivered..complained
+  PRIMARY KEY (campaign_id, email)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_email_sends_status ON email_sends (campaign_id, status);
+CREATE INDEX IF NOT EXISTS idx_email_sends_resend ON email_sends (resend_id) WHERE resend_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_email_sends_email ON email_sends (email);</pre>
+The S4 event columns ship now so S4 needs no migration.</li>
 
-<li><b>Event handler — <code>src/email/webhook.ts</code> <code>applyResendEvent(event, db)</code></b>
-Look up <code>email_sends</code> by <code>resend_id = event.data.email_id</code>. Not found → ignore (test sends, or other senders on the same Resend account). Stamps use <code>COALESCE(col, @at)</code> so the first event wins and redelivery is harmless.
-<div class="tw"><table>
-<tr><th>Resend type</th><th>Write</th></tr>
-<tr><td><code>email.delivered</code></td><td><code>delivered_at</code></td></tr>
-<tr><td><code>email.bounced</code></td><td><code>bounced_at</code>; if <code>data.bounce.type</code> is <code>Permanent</code> (hard): <code>suppressContact(email, { source: 'resend_webhook', reason: 'hard bounce' })</code>. Transient/undetermined: stamp only.</td></tr>
-<tr><td><code>email.complained</code></td><td><code>complained_at</code> + <code>suppressContact(…, { source: 'resend_webhook', reason: 'spam complaint' })</code></td></tr>
-<tr><td><code>email.opened</code></td><td><code>opened_at</code> (first)</td></tr>
-<tr><td><code>email.clicked</code></td><td><code>clicked_at</code> (first)</td></tr>
-<tr><td>anything else (<code>email.sent</code>, <code>email.delivery_delayed</code>, …)</td><td>ignored, 200</td></tr>
-</table></div></li>
+<li><b>Transport — <code>src/email/transport.ts</code> + <code>src/email/resend.ts</code> (new)</b>
+<pre>export interface OutgoingEmail { from: string; to: string; replyTo?: string; subject: string;
+  text: string; html: string; headers: Record&lt;string,string&gt; }
+export interface EmailTransport {
+  sendBatch(emails: OutgoingEmail[], idempotencyKey: string): Promise&lt;{ ids: string[] }&gt;;  // ≤ 100
+  sendOne(email: OutgoingEmail): Promise&lt;{ id: string }&gt;;
+  domainStatus(domain: string): Promise&lt;'verified'|'pending'|'failed'|'not_found'&gt;;
+}</pre>
+<code>resendTransport(apiKey)</code> uses global <code>fetch</code> (no SDK dependency, keeps upstream light): <code>POST https://api.resend.com/emails/batch</code> with <code>Authorization: Bearer</code>, <code>Idempotency-Key</code>, body <code>[{ from, to: [to], reply_to, subject, text, html, headers }]</code>; <code>POST /emails</code> for one; <code>GET /domains</code> and match <code>name</code> case-insensitively. 15 s timeout via <code>AbortSignal.timeout</code>. Throws <code>TransportError { status, retryable, message }</code>: retryable for network errors, 429, and 5xx; not retryable for 4xx. Response ids map to input order. Tests inject a fake transport through <code>setTransportForTests()</code> — never call Resend in tests.</li>
 
-<li><b>Webhook route — <code>src/server/index.ts</code></b>
-The global <code>app.use(express.json({ limit: '64kb' }))</code> consumes the body, and the signature needs the raw bytes. Register <code>app.post('/api/email/webhooks/resend', express.raw({ type: 'application/json', limit: '256kb' }), resendWebhookHandler)</code> <b>before</b> that <code>express.json</code> line and before <code>requireAuth</code>. Handler: 503 if no secret; 401 if the signature fails; parse JSON; <code>applyResendEvent</code>; 200. Errors after a valid signature still return 200 and log (Resend retries non-2xx, and a poison event must not retry forever). Add the endpoint in Resend → Webhooks with the five event types above.</li>
+<li><b>Settings — <code>src/email/settings.ts</code> + routes</b>
+<code>getSettings(db)</code> (returns defaults when no row), <code>saveSettings(input, db)</code> (upsert id 1). Validation, 422 per field: <code>from_name</code> 1–80 chars, no CR/LF; <code>from_email</code> and <code>reply_to</code> match a plain address check and are lowercased; <code>footer_address</code> 10–300 chars (a physical postal address — CAN-SPAM). Reply-To may be blank (then omitted). Routes on <code>emailRouter()</code> — new in this sprint: <code>src/server/email.ts</code>, mounted after <code>app.use('/api', requireAuth)</code> as <code>app.use('/api/email', emailRouter())</code>, errors via <code>EmailError</code> in <code>src/email/errors.ts</code> (mirrors <code>ContactsError</code>) and <code>sendError()</code>: <code>GET /settings</code>, <code>PUT /settings</code>, <code>GET /settings/domain</code> → <code>{ domain, status, blockedReason }</code> via <code>transport.domainStatus()</code>. Nothing here is env-configured on purpose (Henry: "sender should be variables we can enter in the interface").</li>
 
-<li><b>Campaign report — <code>src/email/campaigns.ts</code> + routes</b>
-<code>getCampaign(id)</code> gains <code>stats: { sent, delivered, opened, clicked, bounced, complained, unsubscribed, failed, skipped }</code> (counts of non-null columns / statuses) and <code>rates</code> over <code>delivered</code> (open, click, unsubscribe) and over <code>sent</code> (bounce). New: <code>GET /api/email/campaigns/:id/recipients?filter=all|delivered|opened|clicked|bounced|complained|unsubscribed|failed|skipped&amp;q=&amp;limit=50&amp;offset=0</code> → rows with name, email, store, status, and the event times. <code>POST /api/email/campaigns/:id/retry-failed</code> → failed rows back to <code>queued</code> (new batch keys), campaign back to <code>sending</code>; only for <code>sent|failed</code> campaigns, and only after a type-the-count confirm in the UI.</li>
-
-<li><b>Per-person history — <code>src/email/history.ts</code> + route</b>
-<code>emailHistory(email, db)</code> → <code>[{ campaignId, name, subject, sentAt, status, deliveredAt, openedAt, clickedAt, bouncedAt, complainedAt, unsubscribedAt }]</code>, newest first, joined from <code>email_sends</code> → <code>email_campaigns</code>. Route on <code>emailRouter()</code>: <code>GET /api/email/contacts/:email/history</code> (kept on the email router so the contacts router stays as it is upstream).</li>
-
-<li><b>UI</b>
+<li><b>Renderer — <code>src/email/render.ts</code> (new)</b>
+<pre>export const MERGE_FIELDS = ['first_name','last_name','email','role','shop_name','shop_domain','myshopify_domain','store_status','app_name'] as const;
+// plus attr.&lt;key&gt; for every custom attribute defined for the app (S2)
+export function validateTemplate(subject: string, body: string): void          // 422 on unknown {{tag}}
+export function renderEmail(input: { subject; previewText; body; merge; sender; unsubscribeUrl })
+  : { subject: string; text: string; html: string; headers: Record&lt;string,string&gt; }</pre>
 <ul>
-<li><b>Campaign page</b> (<code>EmailCampaigns.tsx</code>): stat tiles (Sent, Delivered, Opened ≈, Clicked, Bounced, Unsubscribed), "Opens are approximate" note, filter chips over the recipients table, "Retry N failed".</li>
-<li><b>Contacts page</b> (<code>web/src/components/Contacts.tsx</code>): new "Last email" column (campaign name + a small status) from a batched read: add <code>lastEmailFor(emails[])</code> beside <code>emailHistory()</code> and serve it from <code>GET /api/email/contacts/last?emails=…</code> for the visible page only. Clicking it opens a popover with the full history.</li>
-<li><b>Customer page Contacts tab</b> (<code>web/src/components/CustomerContacts.tsx</code>): same "Last email" column.</li>
-<li>Suppression source labels: <code>resend_webhook</code> shows the reason ("hard bounce" / "spam complaint").</li>
+<li>Merge syntax <code>{{first_name}}</code> and <code>{{first_name|there}}</code> (fallback when blank). Applied to subject and body. Values are HTML-escaped in the html part. <code>{{attr.timezone}}</code> reads S2's <code>shopAttributes()</code>; booleans render "on" / "off". <code>shop_domain</code> is the <code>primary_domain</code> attribute when set, else the myshopify domain.</li>
+<li><b>Page buttons</b> (S2 app links): <code>{{button "Go to your Orders page" page="orders"}}</code> renders one button style — a 6 px rounded block in the sender's button colour (S3 Settings field, default <code>#2e72d2</code>), white text, 44 px tall, full width on phones — and in the text part <code>Go to your Orders page: &lt;url&gt;</code>. <code>[link text](page:orders)</code> renders a plain link. The URL comes from <code>appPageUrl()</code> per recipient. An unknown page key is a 422 at save; a store with no handle renders the link as plain text without a URL and the confirm step warns.</li>
+<li>Markdown subset, no dependency: blank line → paragraph, single newline → <code>&lt;br&gt;</code>, <code>[text](https://…)</code> links (http/https only; anything else renders as text), <code>**bold**</code>, <code>*italic*</code>, bare <code>https://</code> URLs autolinked. Escape first, then format. Text part renders links as <code>text (url)</code>.</li>
+<li>HTML part is a single 560 px column in system font, no images, plus a hidden preheader span carrying <code>previewText</code>.</li>
+<li>Footer on both parts: <code>— </code>, the footer address, "You get this email because you use {{app_name}} on {{shop_name}}.", "Unsubscribe from {type label}: &lt;one-click url&gt;", and "Email preferences: &lt;page url&gt;".</li>
+<li>Headers: <code>List-Unsubscribe: &lt;{one-click url}&gt;</code> and <code>List-Unsubscribe-Post: List-Unsubscribe=One-Click</code> (RFC 8058). The one-click URL turns off only this email's type.</li>
+<li>From is <code>"{from_name}" &lt;{from_email}&gt;</code> with the name's quotes escaped.</li>
 </ul></li>
 
-<li><b>Tests — <code>test/emailWebhook.test.ts</code>, extend <code>test/emailSend.test.ts</code></b> (cases below). Sign fixture payloads with a test secret in the test itself.</li>
+<li><b>Email types + preferences — <code>src/email/types.ts</code>, <code>src/email/preferences.ts</code> (new)</b>
+<pre>CREATE TABLE IF NOT EXISTS email_types (
+  key             TEXT PRIMARY KEY,           -- product_updates | weekly_recap | tips | account_notices
+  label           TEXT NOT NULL,
+  description     TEXT NOT NULL,
+  can_unsubscribe INTEGER NOT NULL DEFAULT 1, -- 0 only for account_notices
+  sort            INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS email_preferences (
+  email      TEXT NOT NULL,
+  type_key   TEXT NOT NULL,
+  subscribed INTEGER NOT NULL,                 -- no row = subscribed
+  source     TEXT NOT NULL,                    -- preference_page | one_click | complaint (S4)
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (email, type_key)
+) WITHOUT ROWID;</pre>
+Seed the four types in the migration (labels and descriptions as in the mockup below). Editing them is S7. <code>isSubscribed(email, typeKey, db)</code> is true when the type cannot be unsubscribed, or when there is no row, or the row says 1. <code>setPreferences(email, { [typeKey]: boolean }, source, db)</code> ignores types that cannot be unsubscribed. <code>unsubscribeAllMarketing(email, source, db)</code> sets every <code>can_unsubscribe</code> type to 0. <code>prepareCampaign()</code> drops recipients where <code>isSubscribed(email, campaign.email_type)</code> is false and counts them as <code>skip_reason = 'unsubscribed_type'</code>; the confirm modal shows "N turned off {type}". A suppressed contact (bounce, manual) still gets nothing, of any type.</li>
+
+<li><b>Preference page + tokens — <code>src/email/links.ts</code>, <code>src/server/preferences.ts</code> (new)</b>
+Token = <code>base64url(email + "\n" + typeKey + "\n" + sourceId)</code> + "." + <code>base64url(HMAC-SHA256(EMAIL_LINK_SECRET, same payload))</code>, verified with <code>crypto.timingSafeEqual</code>; <code>sourceId</code> is the campaign id or <code>test</code>. Mounted <b>before</b> <code>requireAuth</code> and before the SPA fallback: <code>app.use('/p', express.urlencoded({ extended: false, limit: '2kb' }), preferencesRouter())</code>. All pages server-rendered, no JavaScript needed, styled like the mockup, in the sender's name (From name from settings) — never "PartnerDex".
+<ul>
+<li><code>GET /p/:token</code> → the preference page for that email: one switch per type, "Always on" for types that cannot be unsubscribed, Save, and "Unsubscribe from all marketing email". GET never changes state (link scanners prefetch GETs).</li>
+<li><code>POST /p/:token/one-click</code> (List-Unsubscribe-Post from the mail app) → turns off only the token's type, <code>source = 'one_click'</code>, sets <code>email_sends.unsubscribed_at</code>, answers 200 with a short page. Idempotent.</li>
+<li>The footer "Unsubscribe from {type}" link opens <code>GET /p/:token?off=1</code>: the page with that type's switch already off and the green note "You are unsubscribed from {type}" with Undo — the state is saved on the page's own POST, never on the GET.</li>
+<li><code>POST /p/:token</code> (Save) → <code>setPreferences(…, 'preference_page')</code>; <code>POST /p/:token/all</code> → <code>unsubscribeAllMarketing()</code>, then the "You will not get marketing email" page (second mockup state). Test tokens answer "This was a test email — nothing changed."</li>
+<li>Bad token → 400 page, no detail. The page lives on <code>PUBLIC_BASE_URL</code> (the PartnerDex domain) in this sprint; a custom domain is S7.</li>
+</ul></li>
+
+<li><b>Campaign store — <code>src/email/campaigns.ts</code> (new)</b>
+<code>createCampaign({ name, audience | audienceId })</code> (copies the saved definition), <code>updateCampaign(id, { name?, subject?, previewText?, body?, audience? })</code>, <code>deleteCampaign(id)</code> (draft/ready only), <code>listCampaigns()</code>, <code>getCampaign(id)</code> (with live counts by status from <code>email_sends</code>). Any content or audience edit on a <code>ready</code> campaign deletes its queued rows and sets it back to <code>draft</code>. Subject 1–200 chars, no CR/LF; preview 0–150; body 1–20 000; <code>validateTemplate()</code> on save. Campaigns in <code>sending|sent|cancelled|failed</code> are read-only (409).</li>
+
+<li><b>Prepare / confirm / send / cancel — <code>src/email/campaigns.ts</code></b>
+<ul>
+<li><code>prepareCampaign(id)</code>: requires <code>sendingBlockedReason() === null</code> and <code>domainStatus === 'verified'</code>, status <code>draft|ready</code>, subject and body present. Runs <code>resolveAudience()</code> (S1, <code>src/audiences/audience.ts</code>); in one transaction deletes old queued rows, inserts one <code>email_sends</code> row per recipient (<code>merge</code> JSON includes <code>app_name</code> from <code>apps.name</code>), snapshots sender settings onto the campaign, sets <code>status='ready'</code>, <code>recipient_count</code>, <code>prepared_at</code>. Returns <code>{ count, excluded, sample[≤10], missingFirstName }</code>. 0 recipients → 422.</li>
+<li><code>startSend(id, confirmCount)</code>: status must be <code>ready</code>; <code>confirmCount === recipient_count</code> else 409 "Type {n} to confirm."; <code>prepared_at</code> within 60 min else 409 "The list is over an hour old. Prepare it again." Sets <code>sending</code>, <code>started_at</code>, wakes the runner.</li>
+<li><code>cancelCampaign(id)</code>: <code>sending|ready</code> → <code>cancelled</code>; queued rows → <code>skipped</code>/<code>cancelled</code>. A batch already in flight completes.</li>
+<li><code>sendTest(id, to?)</code>: renders with the first prepared or resolved recipient's merge values (falls back to placeholders), subject prefixed <code>[Test] </code>, test unsubscribe token, <code>transport.sendOne()</code>. <code>to</code> defaults to settings <code>reply_to</code>. Max 20 tests per campaign per hour (in-memory counter).</li>
+</ul>
+Routes on <code>emailRouter()</code>: <code>GET|POST /campaigns</code>, <code>GET|PUT|DELETE /campaigns/:id</code>, <code>POST /campaigns/:id/render</code> (preview for the first sample recipient; returns <code>{subject,text,html}</code>), <code>POST /campaigns/:id/test</code>, <code>POST /campaigns/:id/prepare</code>, <code>POST /campaigns/:id/send</code> <code>{ confirmCount }</code>, <code>POST /campaigns/:id/cancel</code>.</li>
+
+<li><b>Runner — <code>src/email/runner.ts</code> (new)</b>
+Same shape as <code>src/sync/scheduler.ts</code>: a chained <code>setTimeout</code>, never two ticks at once, <code>startEmailRunner()</code> called from <code>src/server/index.ts</code> next to <code>startSyncScheduler()</code>, and only when <code>sendingBlockedReason()</code> is null. <code>wakeEmailRunner()</code> schedules an immediate tick. Tick (in-process, not the sync worker — it is I/O-bound):
+<ol>
+<li>Pick the oldest campaign with <code>status='sending'</code>. None → sleep 30 s.</li>
+<li><b>Resume first:</b> if rows with <code>status='sending'</code> exist (a crash or deploy mid-batch), resend exactly those rows with their stored <code>batch_key</code>. Resend's idempotency key returns the original result instead of sending twice (keys live 24 h; a batch stuck past 23 h → rows <code>failed</code>, error "idempotency window passed — check Resend before resending").</li>
+<li>Else take the next 100 <code>queued</code> rows by email. Re-check suppression now (someone may have unsubscribed from an earlier campaign mid-send) → those rows <code>skipped</code>/<code>suppressed</code>. In one transaction: <code>batch_seq += 1</code>, <code>batch_key = campaignId + ':' + batch_seq</code>, rows → <code>sending</code>.</li>
+<li>Render each row with <code>renderEmail()</code> from the campaign snapshot and its <code>merge</code>; call <code>transport.sendBatch()</code>.</li>
+<li>Success → rows <code>sent</code>, <code>resend_id</code>, <code>sent_at</code>; bump counters. Non-retryable error → rows <code>failed</code> with the message. Retryable → leave <code>sending</code>, back off 5 s → 10 s → … → 5 min.</li>
+<li>No <code>queued</code> or <code>sending</code> rows left → campaign <code>sent</code> (or <code>failed</code> if every row failed), <code>finished_at</code>. Next tick in 1 s while a campaign is sending (well under Resend's default rate limit).</li>
+</ol>
+Log one line per batch (<code>campaign, batch, sent, failed</code>) — never the recipient addresses.</li>
+
+<li><b>UI — <code>web/src/components/Email.tsx</code> + <code>EmailCampaigns.tsx</code>, <code>EmailCompose.tsx</code>, <code>EmailSettings.tsx</code> (new)</b>
+The Email page is new in this sprint (S1 put audiences on the Contacts page). Add a <code>PageSpec</code> <code>{ id: 'email', label: 'Email', title: 'Email', kind: 'email', cards: [] }</code> as a top-level item in the first <code>NAV</code> group, after Customers, with an envelope icon (<code>M3.5 5.5h15v11h-15zM3.5 6l7.5 6 7.5-6</code>) in <code>ICONS</code> in <code>Nav.tsx</code>; add <code>'email'</code> to the <code>kind</code> union and an <code>isEmail</code> branch in <code>App.tsx</code> beside <code>isContacts</code>. <code>Email.tsx</code> renders the <code>.page-tabs</code> strip with Campaigns and Settings.
+<ul>
+<li><b>Settings tab:</b> From name, From email, Reply-To, Footer postal address; Save; a domain chip (Verified / Pending / Not in Resend) from <code>/settings/domain</code>; a banner with <code>blockedReason</code> when sending is blocked.</li>
+<li><b>Campaigns tab:</b> table — name, status chip, audience summary, recipients, sent, date; "New campaign".</li>
+<li><b>Compose:</b> left — name, audience (a select of saved audiences from <code>GET /api/audiences</code> with live counts, and an "Edit in Contacts" link to <code>#/contacts/&lt;id&gt;</code>; to make a new one, Henry saves it on the Contacts page first), subject, preview text, body textarea, merge-field buttons that insert <code>{{first_name|there}}</code> etc.; right — live preview from <code>/render</code> (debounced 400 ms) with From / Reply-To / Subject lines and the footer. Actions: Save draft, Send test (address field prefilled with Reply-To), <b>Review and send…</b></li>
+<li><b>Confirm (modal, after <code>/prepare</code>):</b> "This sends <b>171</b> emails from Henry &lt;…&gt;", subject, audience, the sample of 10, excluded line, a warning when some recipients lack a first name and the body uses <code>{{first_name}}</code> without a fallback, and a text box "Type 171 to send". Send stays disabled until it matches.</li>
+<li><b>Sending:</b> campaign page polls <code>GET /campaigns/:id</code> every 3 s — progress bar sent / total, failed and skipped counts, Cancel button.</li>
+</ul></li>
+
+<li><b>Tests — <code>test/emailSend.test.ts</code>, <code>test/emailRender.test.ts</code>, <code>test/emailUnsubscribe.test.ts</code> (new)</b>
+Fake transport records calls and can be told to fail retryably / non-retryably. Cases below.</li>
 </ol>
 
 <h2>Acceptance</h2>
 <div class="tw"><table>
 <tr><th>Scenario</th><th>Expected</th></tr>
-<tr><td>No <code>RESEND_WEBHOOK_SECRET</code>; Resend posts an event</td><td>503; nothing written</td></tr>
-<tr><td>Bad or missing signature / timestamp 10 min old</td><td>401; nothing written</td></tr>
-<tr><td><code>email.delivered</code> for a known <code>resend_id</code></td><td><code>delivered_at</code> set; posting it again leaves the first time</td></tr>
-<tr><td><code>email.bounced</code>, type Permanent</td><td><code>bounced_at</code> set; contact suppressed, source <code>resend_webhook</code>, reason "hard bounce"; next S1 preview counts them as suppressed</td></tr>
-<tr><td><code>email.bounced</code>, type Transient</td><td><code>bounced_at</code> set; not suppressed</td></tr>
-<tr><td><code>email.complained</code></td><td>Stamp + suppressed, reason "spam complaint"</td></tr>
-<tr><td>Event for an unknown <code>email_id</code> (a test send)</td><td>200; nothing written</td></tr>
-<tr><td>Valid signature, handler throws</td><td>200 + log line (no retry storm)</td></tr>
-<tr><td>Campaign with 171 sent, 165 delivered, 40 clicked</td><td>Report shows click rate 24.2% (over delivered)</td></tr>
-<tr><td>Retry failed on a campaign with 3 failed</td><td>Requires typing 3; those rows re-queued with new batch keys; others untouched</td></tr>
-<tr><td>Contact who got 2 campaigns</td><td>History lists both, newest first; Contacts row shows the newest</td></tr>
+<tr><td>No <code>DASHBOARD_PASSWORD</code>; POST <code>/prepare</code></td><td>403 "Set DASHBOARD_PASSWORD before sending email."; runner not started</td></tr>
+<tr><td>Settings blank; open Campaigns</td><td>Banner "Fill in the sender settings…", Review-and-send disabled</td></tr>
+<tr><td>From domain not verified in Resend; Prepare</td><td>422 naming the domain and its status</td></tr>
+<tr><td>Body uses <code>{{company}}</code></td><td>Save → 422 "Unknown merge field {{company}}. Use one of: …"</td></tr>
+<tr><td>Send test</td><td>One email to the Reply-To address, subject starts <code>[Test]</code>, real merge values, footer present, test unsubscribe link no-ops</td></tr>
+<tr><td>Prepare 171 → type 170</td><td>409, nothing sent</td></tr>
+<tr><td>Prepare, wait 61 min, Send</td><td>409 "Prepare it again"</td></tr>
+<tr><td>Prepare, then edit the subject</td><td>Campaign back to draft; queued rows gone</td></tr>
+<tr><td>Send 250 recipients</td><td>3 Resend batch calls (100/100/50), keys <code>id:1..3</code>; campaign <code>sent</code>, <code>sent_count = 250</code></td></tr>
+<tr><td>Process restarts after batch 2 was marked <code>sending</code> but before the response</td><td>Batch 2 is re-posted with key <code>id:2</code>; no row ends <code>queued</code>; no recipient appears in two batch keys</td></tr>
+<tr><td>Resend 503 on batch 1</td><td>Rows stay <code>sending</code>; retried with the same key after backoff; succeed</td></tr>
+<tr><td>Resend 422 on batch 1</td><td>100 rows <code>failed</code> with the message; batch 2 still goes</td></tr>
+<tr><td>Recipient unsubscribes from campaign A while campaign B is queued with them</td><td>B's row → <code>skipped</code>/<code>suppressed</code>; not sent</td></tr>
+<tr><td>Mail app one-click POST to <code>/p/:token/one-click</code> for a Product updates email</td><td>200; <code>email_preferences</code> row (product_updates, 0, one_click); the contact is <b>not</b> suppressed; Weekly recap still allowed; repeat POST changes nothing</td></tr>
+<tr><td>"Unsubscribe from all marketing email" on the page</td><td>All three marketing types off; Account notices still allowed</td></tr>
+<tr><td>Campaign of type Product updates prepared for someone who turned it off</td><td>Row skipped, <code>skip_reason = unsubscribed_type</code>; confirm shows "1 turned off Product updates"</td></tr>
+<tr><td><code>{{button "Go to your Orders page" page="orders"}}</code> for a store <code>digitalhome2.myshopify.com</code></td><td>HTML button to <code>https://admin.shopify.com/store/digitalhome2/apps/easy-gift-cards/react/orders</code>; text part "Go to your Orders page: &lt;url&gt;"</td></tr>
+<tr><td><code>GET /p/:token</code> and <code>GET /p/:token?off=1</code></td><td>The page only; nothing written</td></tr>
+<tr><td>Tampered token</td><td>400 page; nothing written</td></tr>
+<tr><td>Every sent email</td><td>Has <code>List-Unsubscribe</code> + <code>List-Unsubscribe-Post</code>, the footer address, and a text part</td></tr>
+<tr><td>Cancel mid-send</td><td>In-flight batch finishes; remaining rows <code>skipped</code>/<code>cancelled</code>; status <code>cancelled</code></td></tr>
+<tr><td>Body contains <code>&lt;script&gt;</code> and <code>[x](javascript:alert(1))</code></td><td>Escaped text; no link</td></tr>
 </table></div>
 
 <h2>Tests (named)</h2>
 <ul>
-<li><code>webhook disabled without secret</code> · <code>rejects bad signature</code> · <code>rejects old timestamp</code> · <code>accepts any matching v1 signature</code></li>
-<li><code>delivered stamps once</code> · <code>hard bounce suppresses</code> · <code>soft bounce does not suppress</code> · <code>complaint suppresses</code> · <code>unknown email id ignored</code> · <code>handler error still returns 200</code></li>
-<li><code>campaign stats and rates</code> · <code>recipients filter by event</code> · <code>retry failed requeues only failed rows</code> · <code>history newest first</code> · <code>last email for a page of contacts</code></li>
+<li><code>sending blocked without dashboard password</code> · <code>sending blocked without resend key</code> · <code>prepare blocked when domain unverified</code></li>
+<li><code>settings validate footer address and addresses</code> · <code>unknown merge field rejected</code> · <code>merge fallback used when blank</code> · <code>markdown subset escapes html and drops non-http links</code> · <code>footer and list-unsubscribe headers on every email</code></li>
+<li><code>prepare freezes recipients and snapshots sender</code> · <code>edit after prepare returns to draft</code> · <code>confirm count must match</code> · <code>stale prepare rejected</code></li>
+<li><code>sends in batches of 100 with sequential keys</code> · <code>resumes a sending batch with the same key after restart</code> · <code>retryable error keeps rows sending</code> · <code>non-retryable error fails the batch only</code> · <code>suppressed after prepare is skipped</code> · <code>cancel skips queued rows</code></li>
+<li><code>preference GET does not write</code> · <code>one click turns off only its type</code> · <code>unsubscribe all keeps account notices</code> · <code>prepare skips turned off type</code> · <code>attr merge field renders</code> · <code>page button renders url per store</code> · <code>tampered token rejected</code> · <code>test token is a no-op</code></li>
+<li><code>migrations are 1..7 in order</code></li>
 </ul>
 
 <h2>Explicitly NOT in this sprint</h2>
 <ul>
-<li>Per-link click breakdown, heatmaps, A/B tests.</li>
-<li>Pulling events by polling the Resend API (webhook only).</li>
-<li>Lifecycle / automation — S4.</li>
-<li>Unsuppressing a bounced address automatically — a human does it on the Contacts page.</li>
+<li>Webhook events, bounces/complaints into PartnerDex, open/click stats, per-contact history — S4.</li>
+<li>Editing email types, a custom domain for the preference page — S7. Styled blocks — S8. Data from apps (<code>{{data.*}}</code>, <code>{{#if}}</code>) — S5.</li>
+<li>Scheduled sends (S6), lifecycle triggers (S9), attachments.</li>
+<li>Resending to failed rows (S4 may add "retry failed").</li>
+<li>Any iziGift change.</li>
 </ul>
 
-<h2>Design mockup — campaign report</h2>
+<h2>Design mockups</h2>
+<h3>Preference page (<code>/p/:token</code>)</h3>
+<p>Opened from "Unsubscribe from Weekly recap" in a weekly recap, and after "Unsubscribe from all marketing email". Server-rendered in the sender's name; it never says PartnerDex. Placeholder data.</p>
+<div class="mockbar"><button type="button" data-pref="manage" aria-pressed="true">After "Unsubscribe from Weekly recap"</button><button type="button" data-pref="all" aria-pressed="false">After "Unsubscribe from all"</button></div>
+<div class="mockframe"><iframe id="pref-frame" title="Preference page mockup" style="width:100%;height:760px;border:0;display:block"></iframe></div>
+<template id="pref-manage"><main class="page">
+  <div class="col">
+    <div class="sender"><span class="mark" aria-hidden="true">iz</span>iziGift</div>
+
+    <section id="state-manage">
+      <div class="col">
+        <div>
+          <h1>Choose the emails you get from iziGift</h1>
+          <p class="lead">For <b>jordan@example-candles.com</b> · Example Candles Co</p>
+        </div>
+        <div class="notice" role="status" id="notice">
+          <p>You are unsubscribed from <b>Weekly recap</b>.</p>
+          <button type="button" class="linkish" id="undo">Undo</button>
+        </div>
+        <div class="card">
+          <ul class="types">
+            <li class="type"><div><div class="type-name" id="t1">Product updates</div><div class="type-desc">New features and what changed in the app.</div></div>
+              <label class="switch"><input type="checkbox" id="pref-product" aria-labelledby="t1" checked><span class="track" aria-hidden="true"></span></label></li>
+            <li class="type"><div><div class="type-name" id="t2">Weekly recap</div><div class="type-desc">Your gift cards, redemptions and cashback for the week.</div></div>
+              <label class="switch"><input type="checkbox" id="pref-weekly" aria-labelledby="t2"><span class="track" aria-hidden="true"></span></label></li>
+            <li class="type"><div><div class="type-name" id="t3">Tips and setup help</div><div class="type-desc">Short guides to get more out of iziGift.</div></div>
+              <label class="switch"><input type="checkbox" id="pref-tips" aria-labelledby="t3" checked><span class="track" aria-hidden="true"></span></label></li>
+            <li class="type"><div><div class="type-name" id="t4">Account notices</div><div class="type-desc">Trial ending, billing problems. Sent only when something needs you.</div></div>
+              <span class="always">Always on</span></li>
+          </ul>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn primary" id="save">Save preferences</button>
+          <span class="saved" id="saved" hidden>Saved.</span>
+          <button type="button" class="btn quiet" id="all">Unsubscribe from all marketing email</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="state-all" hidden>
+      <div class="card big">
+        <h2>You will not get marketing email from iziGift</h2>
+        <p>That covers product updates, weekly recaps, and tips for <b>jordan@example-candles.com</b>. We still send account notices when something needs you, such as a billing problem.</p>
+        <div><button type="button" class="btn" id="back">Choose emails again</button></div>
+      </div>
+    </section>
+
+    <div class="foot">
+      <span>iziGift · 123 Placeholder St, Example City, ST 00000</span>
+      <span>This page works without signing in. The link in each email is unique to you.</span>
+    </div>
+  </div>
+</main></template><template id="pref-all"><main class="page">
+  <div class="col">
+    <div class="sender"><span class="mark" aria-hidden="true">iz</span>iziGift</div>
+
+    <section id="state-manage" hidden>
+      <div class="col">
+        <div>
+          <h1>Choose the emails you get from iziGift</h1>
+          <p class="lead">For <b>jordan@example-candles.com</b> · Example Candles Co</p>
+        </div>
+        <div class="notice" role="status" id="notice">
+          <p>You are unsubscribed from <b>Weekly recap</b>.</p>
+          <button type="button" class="linkish" id="undo">Undo</button>
+        </div>
+        <div class="card">
+          <ul class="types">
+            <li class="type"><div><div class="type-name" id="t1">Product updates</div><div class="type-desc">New features and what changed in the app.</div></div>
+              <label class="switch"><input type="checkbox" id="pref-product" aria-labelledby="t1" checked><span class="track" aria-hidden="true"></span></label></li>
+            <li class="type"><div><div class="type-name" id="t2">Weekly recap</div><div class="type-desc">Your gift cards, redemptions and cashback for the week.</div></div>
+              <label class="switch"><input type="checkbox" id="pref-weekly" aria-labelledby="t2"><span class="track" aria-hidden="true"></span></label></li>
+            <li class="type"><div><div class="type-name" id="t3">Tips and setup help</div><div class="type-desc">Short guides to get more out of iziGift.</div></div>
+              <label class="switch"><input type="checkbox" id="pref-tips" aria-labelledby="t3" checked><span class="track" aria-hidden="true"></span></label></li>
+            <li class="type"><div><div class="type-name" id="t4">Account notices</div><div class="type-desc">Trial ending, billing problems. Sent only when something needs you.</div></div>
+              <span class="always">Always on</span></li>
+          </ul>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn primary" id="save">Save preferences</button>
+          <span class="saved" id="saved" hidden>Saved.</span>
+          <button type="button" class="btn quiet" id="all">Unsubscribe from all marketing email</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="state-all">
+      <div class="card big">
+        <h2>You will not get marketing email from iziGift</h2>
+        <p>That covers product updates, weekly recaps, and tips for <b>jordan@example-candles.com</b>. We still send account notices when something needs you, such as a billing problem.</p>
+        <div><button type="button" class="btn" id="back">Choose emails again</button></div>
+      </div>
+    </section>
+
+    <div class="foot">
+      <span>iziGift · 123 Placeholder St, Example City, ST 00000</span>
+      <span>This page works without signing in. The link in each email is unique to you.</span>
+    </div>
+  </div>
+</main></template>
+<script type="text/plain" id="pref-css">
+/* Layout: a reviewer strip on top (mock chrome), then the public page itself: one centred 560px column, sender name first, the email-type switches as the one object that matters. Accent stands in for the sender's brand colour (a setting). */
+:root{
+  --ground:#f4f6f9; --paper:#ffffff; --ink:#111827; --ink-2:#4b5563; --muted:#6b7280; --rule:#e2e6ec;
+  --accent:#2e72d2; --accent-ink:#ffffff; --accent-soft:#e8f0fb; --ok:#15803d; --ok-soft:#e7f6ec;
+  --strip:#1f2937; --strip-ink:#e5e7eb;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0f1115; --paper:#181b21; --ink:#e7e9ee; --ink-2:#b4bac5; --muted:#9aa1ad; --rule:#2b3038;
+  --accent:#6ba3e8; --accent-ink:#0b1220; --accent-soft:#1b2a40; --ok:#4ade80; --ok-soft:#163222;
+  --strip:#05070a; --strip-ink:#d1d5db; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --ground:#0f1115; --paper:#181b21; --ink:#e7e9ee; --ink-2:#b4bac5; --muted:#9aa1ad; --rule:#2b3038;
+  --accent:#6ba3e8; --accent-ink:#0b1220; --accent-soft:#1b2a40; --ok:#4ade80; --ok-soft:#163222;
+  --strip:#05070a; --strip-ink:#d1d5db; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.55 var(--sans)}
+.strip{background:var(--strip);color:var(--strip-ink);font-size:13px;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.strip-in{max-width:980px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.strip b{color:#fff;font-weight:600}
+.seg{display:inline-flex;border:1px solid #4b5563;border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-size:13px;background:none;border:0;color:var(--strip-ink);padding:5px 11px;cursor:pointer}
+.seg button+button{border-left:1px solid #4b5563}
+.seg button[aria-pressed="true"]{background:#374151;color:#fff;font-weight:600}
+.seg button:focus-visible,.btn:focus-visible,.switch input:focus-visible+.track{outline:2px solid var(--accent);outline-offset:2px}
+.url{font-family:var(--mono);font-size:12px;color:#9ca3af;overflow-wrap:anywhere}
+.page{padding-block:40px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.col{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.sender{display:flex;align-items:center;gap:10px;font-weight:650;font-size:17px;letter-spacing:-.01em}
+.mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:14px;font-weight:700}
+h1{font-size:24px;line-height:1.25;margin:0;letter-spacing:-.015em;text-wrap:balance}
+.lead{margin:6px 0 0;color:var(--ink-2)}
+.lead b{color:var(--ink);font-weight:600;overflow-wrap:anywhere}
+.notice{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;background:var(--ok-soft);border:1px solid color-mix(in srgb,var(--ok) 35%,transparent);border-radius:10px;padding:12px 14px}
+.notice p{margin:0;min-width:0}
+.notice .linkish{font:inherit;background:none;border:0;color:var(--accent);cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px}
+.card{background:var(--paper);border:1px solid var(--rule);border-radius:12px}
+.types{list-style:none;margin:0;padding:0}
+.type{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:center;padding:16px 18px}
+.type+.type{border-top:1px solid var(--rule)}
+.type-name{font-weight:600}
+.type-desc{color:var(--muted);font-size:14px;margin-top:2px}
+.always{font-size:12px;color:var(--muted);white-space:nowrap}
+.switch{position:relative;display:inline-flex;cursor:pointer}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.track{width:42px;height:24px;border-radius:999px;background:var(--rule);position:relative;transition:background .15s}
+.track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--paper);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.switch input:checked+.track{background:var(--accent)}
+.switch input:checked+.track::after{transform:translateX(18px)}
+.switch input:disabled+.track{opacity:.5;cursor:default}
+.actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.btn{font:inherit;font-weight:600;border-radius:8px;padding:10px 16px;cursor:pointer;border:1px solid var(--rule);background:var(--paper);color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.quiet{border:0;background:none;color:var(--ink-2);padding-inline:0;font-weight:500;text-decoration:underline;text-underline-offset:3px}
+.saved{font-size:14px;color:var(--ok)}
+.foot{font-size:13px;color:var(--muted);border-top:1px solid var(--rule);padding-top:16px;display:flex;flex-direction:column;gap:4px}
+.big{padding:28px 22px;text-align:left;display:flex;flex-direction:column;gap:10px}
+.big h2{margin:0;font-size:19px}
+.big p{margin:0;color:var(--ink-2)}
+@media (prefers-reduced-motion:reduce){.track,.track::after{transition:none}}
+</script>
+<script>
+(function(){
+  var f=document.getElementById('pref-frame'),css=document.getElementById('pref-css').textContent.replace(/<\\\//g,'</'),st='manage';
+  function r(){f.srcdoc='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style></head><body>'+document.getElementById('pref-'+st).innerHTML+'</body></html>';}
+  document.querySelectorAll('[data-pref]').forEach(function(b){b.addEventListener('click',function(){st=b.getAttribute('data-pref');document.querySelectorAll('[data-pref]').forEach(function(x){x.setAttribute('aria-pressed',String(x===b));});r();});});
+  r();
+})();
+</script>
+
+<h3>Settings tab</h3>
+<div class="mock">
+<div class="mtabs"><span>Campaigns</span><span class="on">Settings</span></div>
+<div class="row"><div><label>From name</label><div class="in">Henry from iziGift</div></div><div><label>From email</label><div class="in">henry@updates.izigift.co</div></div></div>
+<div class="row"><div><label>Reply-To</label><div class="in">henry@izigift.co</div></div><div><label>Sending domain</label><span class="chip done">updates.izigift.co · Verified</span></div></div>
+<div><label>Footer postal address (required by law)</label><div class="ta">[Business name] · [Street] · [City, State ZIP]</div></div>
+<div class="row"><span class="btn p">Save</span><span class="tiny">API key and link secret stay in the server environment — not editable here.</span></div>
+</div>
+
+<h3>Compose</h3>
 <div class="mock">
 <div class="mtabs"><span class="on">Campaigns</span><span>Settings</span></div>
-<b style="font-size:17px">3 gift card ideas for Q4</b> <span class="chip done">Sent</span> <span class="tiny">· Oct 14, 9:02 AM · iziGift · Paying · Owner, Staff</span>
-<div class="mgrid" style="margin-top:10px">
-<div class="mtile"><div class="l">Sent</div><div class="v">171</div></div>
-<div class="mtile"><div class="l">Delivered</div><div class="v">165</div><div class="tiny">96.5%</div></div>
-<div class="mtile"><div class="l">Opened ≈</div><div class="v">88</div><div class="tiny">53% · approximate</div></div>
-<div class="mtile"><div class="l">Clicked</div><div class="v">40</div><div class="tiny">24.2%</div></div>
-<div class="mtile"><div class="l">Bounced</div><div class="v">6</div><div class="tiny">4 hard → suppressed</div></div>
-<div class="mtile"><div class="l">Unsubscribed</div><div class="v">3</div><div class="tiny">1.8%</div></div>
+<div class="split">
+<div>
+<label>Audience</label><div class="in">Paying — owners + staff · <b>171 people</b></div>
+<label style="margin-top:8px">Subject</label><div class="in">{{first_name|Hi}}, 3 gift card ideas for Q4</div>
+<label style="margin-top:8px">Preview text</label><div class="in">Two take ten minutes. One pays for the app.</div>
+<label style="margin-top:8px">Body</label>
+<div class="ta">Hi {{first_name|there}},
+
+Q4 is when gift cards sell. Here are three things {{shop_name}} can set up this week:
+
+**1. A gift card on your homepage.** …
+
+Reply to this email if you want help — I read every one.
+
+— Henry</div>
+<div class="row"><span class="pill">+ first_name</span><span class="pill">+ shop_name</span><span class="pill">+ app_name</span></div>
+<div class="row"><span class="btn">Save draft</span><span class="btn">Send test to henry@izigift.co</span><span class="btn p">Review and send…</span></div>
 </div>
-<div class="row"><span class="pill on">All</span><span class="pill">Clicked</span><span class="pill">Opened</span><span class="pill">Bounced</span><span class="pill">Unsubscribed</span><span class="pill">Failed</span></div>
-<div class="tw"><table><tr><th>Name</th><th>Store</th><th>Status</th><th>Clicked</th></tr>
-<tr><td>Aaron Layne</td><td>Peachy Sunday</td><td>Delivered · opened</td><td>Oct 14, 9:40 AM</td></tr>
-<tr><td>Addison Arendt</td><td>Net To Table Seafoods</td><td>Delivered</td><td>—</td></tr>
-<tr><td>Abby Bond</td><td>Plunkett's</td><td>Bounced (hard) · suppressed</td><td>—</td></tr></table></div>
-<p class="tiny">Illustrative numbers — not real data.</p>
+<div>
+<label>Preview — Aaron Layne · Peachy Sunday</label>
+<div class="envelope"><div class="h">From: Henry from iziGift &lt;henry@updates.izigift.co&gt; · Reply-To: henry@izigift.co</div><div class="h">Subject: <b>Aaron, 3 gift card ideas for Q4</b></div><p>Hi Aaron,</p><p>Q4 is when gift cards sell. Here are three things Peachy Sunday can set up this week:</p><p><b>1. A gift card on your homepage.</b> …</p><p>Reply to this email if you want help — I read every one.</p><p>— Henry</p>
+<div class="foot">[Business name] · [Street] · [City, State ZIP]<br>You get this email because you use iziGift on Peachy Sunday. <u>Unsubscribe</u></div></div>
 </div>
+</div>
+</div>
+
+<h3>Confirm</h3>
+<div class="mock" style="max-width:520px">
+<b style="font-size:17px">Send this email?</b>
+<p>This sends <b>171 emails</b> from Henry from iziGift &lt;henry@updates.izigift.co&gt;.</p>
+<p class="tiny">Subject: "{{first_name|Hi}}, 3 gift card ideas for Q4" · Audience: iziGift · Paying · Owner, Staff<br>14 left out (9 suppressed · 3 store match not confirmed · 2 no status) · 11 duplicates merged</p>
+<div class="warnbox">6 recipients have no first name. They will see the fallback "there".</div>
+<p class="tiny">Sample: aaron@peachysunday.com · addison@nettotableseafoods.com · abby@bondbrandedgear.com · …</p>
+<label>Type 171 to send</label><div class="row"><div class="in" style="min-width:120px">171</div><span class="btn">Cancel</span><span class="btn x">Send 171 emails</span></div>
+</div>
+
+<h3>Sending</h3>
+<div class="mock">
+<b>3 gift card ideas for Q4</b> <span class="chip todo">Sending</span>
+<div style="height:10px;border-radius:5px;background:var(--line);margin:10px 0"><div style="width:58%;height:10px;border-radius:5px;background:var(--brand)"></div></div>
+<p class="tiny">100 of 171 sent · 0 failed · 1 skipped (unsubscribed since prepare) · <u>Cancel</u></p>
+</div>
+<p class="tiny">Placeholder addresses and copy — not real data, not a final sender.</p>
 
 </main></body></html>

@@ -30,7 +30,7 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 .pill.on{border-color:var(--brand);color:var(--brand)}
 </style></head><body><nav class="top"><a href="index.html">Overview</a><a href="sprint-1.html" class="on">S1 · Ingest</a><a href="sprint-2.html">S2 · iziGift producer</a><a href="sprint-3.html">S3 · Metric definitions</a><a href="sprint-4.html">S4 · Customer page</a><a href="sprint-5.html">S5 · Reports (open)</a></nav><main>
 <h1>Sprint 1 — Ingest + raw usage events</h1>
-<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · migration 7</p>
+<p class="sub"><span class="chip todo">Not started</span> · repo: partnerdex · migration 9</p>
 
 <h2>Why this ships now</h2>
 <p>PartnerDex has no place to put app-side events. Every day without the table is a day of usage history that is gone for good — the Partner API cannot replay it. This sprint opens the door and keeps everything that comes through it.</p>
@@ -40,8 +40,8 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 
 <h2>Build</h2>
 <ol class="build">
-<li><b>Migration 7 — <code>src/db/migrate.ts</code></b>
-Add <code>USAGE_SCHEMA_SQL</code> next to <code>CONTACTS_SCHEMA_SQL</code> and a <code>{ version: 7, up: (db) =&gt; db.exec(USAGE_SCHEMA_SQL) }</code> entry. Check upstream <code>main</code> and the Email roadmap for a migration 7 first (fork <code>CLAUDE.md</code>); renumber if it exists.
+<li><b>Migration 9 — <code>src/db/migrate.ts</code></b>
+Add <code>USAGE_SCHEMA_SQL</code> next to <code>CONTACTS_SCHEMA_SQL</code> and a <code>{ version: 9, up: (db) =&gt; db.exec(USAGE_SCHEMA_SQL) }</code> entry. Check upstream <code>main</code> and the Email roadmap for a migration 9 first (fork <code>CLAUDE.md</code>); renumber if it exists.
 <pre>CREATE TABLE IF NOT EXISTS usage_events (
   app_id       TEXT NOT NULL,
   event_name   TEXT NOT NULL,
@@ -123,7 +123,7 @@ Add <code>USAGE_EVENTS: PageSpec</code> (<code>id: 'usage-events'</code>, <code>
 <li><code>rolls back the whole batch when one event is invalid</code></li>
 <li><code>accepts a 500-event batch above the global 64kb body limit</code></li>
 <li><code>usage_events survives rebuildDerivedTables</code></li>
-<li><code>migration 7 creates usage_events and is idempotent on replay</code> (extend <code>test/migrate.test.ts</code> sequence check: 1,2,3,4)</li>
+<li><code>migration 9 creates usage_events and is idempotent on replay</code> (extend <code>test/migrate.test.ts</code> sequence check: 1,2,3,4)</li>
 <li><code>contacts ingest keeps its 503/401 messages</code> (existing suite, must stay green)</li>
 </ul>
 
