@@ -22,6 +22,7 @@ import { onSyncComplete, startSyncScheduler, syncStatus } from '../sync/schedule
 import { authRequired, authRouter, requireAuth } from './auth.js';
 import { audiencesRouter } from './audiences.js';
 import { contactsDashboardRouter, contactsRouter } from './contacts.js';
+import { identifyRouter, shopDetailsHandler } from './identify.js';
 import { sendError } from './errors.js';
 import { notificationsRouter } from './notifications.js';
 import { listingsRouter } from './listings.js';
@@ -88,6 +89,11 @@ export function createApp(): express.Express {
   // front of this process is — trusting more would trust whatever a client put
   // in the header.
   if (getConfig().runtime.trustProxy) app.set('trust proxy', 1);
+  // App identify — bearer token, not the dashboard cookie. Mounted ahead of
+  // the 64kb parser below because a batch of 500 shops is larger than that;
+  // the router reads its own body (1mb) after the token check.
+  app.use('/api/identify', identifyRouter());
+
   // Only the notification routes accept a body, and the largest of those is a
   // name and a URL. A small ceiling keeps a stray upload from becoming memory.
   app.use(express.json({ limit: '64kb' }));
@@ -274,6 +280,8 @@ export function createApp(): express.Express {
       sendError(response, error);
     }
   });
+
+  app.get('/api/customers/:shopId/details', shopDetailsHandler);
 
   app.get('/api/customers/:shopId', (request, response) => {
     try {

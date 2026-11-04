@@ -156,7 +156,7 @@ fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/contacts.
 fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/contacts.csv --app-id=<your-app-id> --commit"
 ```
 
-Set `CONTACTS_INGEST_TOKEN` (Fly secret) before any app producer starts calling `POST /api/contacts/ingest`.
+Set `INGEST_TOKEN` (Fly secret) before any app producer starts calling `POST /api/identify` or `POST /api/contacts/ingest`. An install that still sets the old name, `CONTACTS_INGEST_TOKEN`, keeps working and logs one deprecation line at startup; to rename it, run `fly secrets set INGEST_TOKEN=<the current value>` before the deploy and `fly secrets unset CONTACTS_INGEST_TOKEN` after it.
 
 ### Resilient Redeploys
 During deployments, the running container stops and restarts, which may interrupt an active sync loop. This is completely safe; PartnerDex's synchronization logic is fully incremental, re-reading records from a 3-day overlap window prior to the last known watermark to catch late-arriving events.
