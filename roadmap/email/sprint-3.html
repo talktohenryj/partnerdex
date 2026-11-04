@@ -236,7 +236,7 @@ Fake transport records calls and can be told to fail retryably / non-retryably. 
 <tr><td>Mail app one-click POST to <code>/p/:token/one-click</code> for a Product updates email</td><td>200; <code>email_preferences</code> row (product_updates, 0, one_click); the contact is <b>not</b> suppressed; Weekly recap still allowed; repeat POST changes nothing</td></tr>
 <tr><td>"Unsubscribe from all marketing email" on the page</td><td>All three marketing types off; Account notices still allowed</td></tr>
 <tr><td>Campaign of type Product updates prepared for someone who turned it off</td><td>Row skipped, <code>skip_reason = unsubscribed_type</code>; confirm shows "1 turned off Product updates"</td></tr>
-<tr><td><code>{{button "Go to your Orders page" page="orders"}}</code> for a store <code>digitalhome2.myshopify.com</code></td><td>HTML button to <code>https://admin.shopify.com/store/digitalhome2/apps/easy-gift-cards/react/orders</code>; text part "Go to your Orders page: &lt;url&gt;"</td></tr>
+<tr><td><code>{{button "Go to your Orders page" page="orders"}}</code> for a store <code>example-candles.myshopify.com</code></td><td>HTML button to <code>https://admin.shopify.com/store/example-candles/apps/easy-gift-cards/react/orders</code>; text part "Go to your Orders page: &lt;url&gt;"</td></tr>
 <tr><td><code>GET /p/:token</code> and <code>GET /p/:token?off=1</code></td><td>The page only; nothing written</td></tr>
 <tr><td>Tampered token</td><td>400 page; nothing written</td></tr>
 <tr><td>Every sent email</td><td>Has <code>List-Unsubscribe</code> + <code>List-Unsubscribe-Post</code>, the footer address, and a text part</td></tr>
@@ -465,9 +465,9 @@ Reply to this email if you want help — I read every one.
 <div class="row"><span class="btn">Save draft</span><span class="btn">Send test to henry@izigift.co</span><span class="btn p">Review and send…</span></div>
 </div>
 <div>
-<label>Preview — Aaron Layne · Peachy Sunday</label>
-<div class="envelope"><div class="h">From: Henry from iziGift &lt;henry@updates.izigift.co&gt; · Reply-To: henry@izigift.co</div><div class="h">Subject: <b>Aaron, 3 gift card ideas for Q4</b></div><p>Hi Aaron,</p><p>Q4 is when gift cards sell. Here are three things Peachy Sunday can set up this week:</p><p><b>1. A gift card on your homepage.</b> …</p><p>Reply to this email if you want help — I read every one.</p><p>— Henry</p>
-<div class="foot">[Business name] · [Street] · [City, State ZIP]<br>You get this email because you use iziGift on Peachy Sunday. <u>Unsubscribe</u></div></div>
+<label>Preview — Riley Sample · Example Outdoor</label>
+<div class="envelope"><div class="h">From: Henry from iziGift &lt;henry@updates.izigift.co&gt; · Reply-To: henry@izigift.co</div><div class="h">Subject: <b>Aaron, 3 gift card ideas for Q4</b></div><p>Hi Aaron,</p><p>Q4 is when gift cards sell. Here are three things Example Outdoor can set up this week:</p><p><b>1. A gift card on your homepage.</b> …</p><p>Reply to this email if you want help — I read every one.</p><p>— Henry</p>
+<div class="foot">[Business name] · [Street] · [City, State ZIP]<br>You get this email because you use iziGift on Example Outdoor. <u>Unsubscribe</u></div></div>
 </div>
 </div>
 </div>
@@ -478,7 +478,7 @@ Reply to this email if you want help — I read every one.
 <p>This sends <b>171 emails</b> from Henry from iziGift &lt;henry@updates.izigift.co&gt;.</p>
 <p class="tiny">Subject: "{{first_name|Hi}}, 3 gift card ideas for Q4" · Audience: iziGift · Paying · Owner, Staff<br>14 left out (9 suppressed · 3 store match not confirmed · 2 no status) · 11 duplicates merged</p>
 <div class="warnbox">6 recipients have no first name. They will see the fallback "there".</div>
-<p class="tiny">Sample: aaron@peachysunday.com · addison@nettotableseafoods.com · abby@bondbrandedgear.com · …</p>
+<p class="tiny">Sample: riley@example-outdoor.com · casey@example-coffee.com · morgan@example-apparel.com · …</p>
 <label>Type 171 to send</label><div class="row"><div class="in" style="min-width:120px">171</div><span class="btn">Cancel</span><span class="btn x">Send 171 emails</span></div>
 </div>
 

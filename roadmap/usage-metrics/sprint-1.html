@@ -75,7 +75,7 @@ Per event: <code>assertAppInScope(appId)</code>; validate <code>eventName</code>
 <li><b>Router — <code>src/server/usage.ts</code> (new)</b>
 <code>usageIngestRouter()</code>: <code>POST /ingest</code> behind <code>requireBearer(usageIngestToken)</code>. Body is one event or <code>{ events: [...] }</code> (max 500). Event shape:
 <pre>{ "appId": "1234", "eventName": "order", "eventId": "5551234",
-  "myshopifyDomain": "team-outfitters-sarnia.myshopify.com",   // or "shopId"
+  "myshopifyDomain": "example-candles.myshopify.com",   // or "shopId"
   "occurredAt": "2026-10-01T06:01:00Z",
   "properties": { "usdOrderTotal": "13.03", "originalCurrency": "GBP", ... } }</pre>
 Returns <code>{ accepted, unresolved }</code>.
