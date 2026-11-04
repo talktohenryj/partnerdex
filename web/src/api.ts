@@ -299,6 +299,21 @@ export const fetchCustomer = (shopId: string, appId = ''): Promise<CustomerDetai
   );
 };
 
+export interface ShopDetails {
+  shopId: string;
+  primaryDomain: string | null;
+  country: string | null;
+  currency: string | null;
+  timezone: string | null;
+  shopifyPlan: string | null;
+  updatedAt: string;
+  updatedByApp: string;
+  updatedByAppName: string | null;
+}
+
+export const fetchShopDetails = (shopId: string): Promise<ShopDetails | null> =>
+  getJson<ShopDetails | null>(`/api/customers/${encodeURIComponent(shopId)}/details`);
+
 /* --------------------------------------------------------------- contacts */
 
 export type ContactRole = 'owner' | 'staff' | 'collaborator';

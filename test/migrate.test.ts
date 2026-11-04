@@ -98,6 +98,18 @@ describe('migration runner', () => {
     db.close();
   });
 
+  it('migrations are 1..6 in order and 6 creates shop_details', () => {
+    assert.ok(MIGRATIONS.length >= 6, 'shop details ship as migration 6');
+    assert.equal(MIGRATIONS[5]!.version, 6);
+    const db = freshDb();
+    migrate(db);
+    const table = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'shop_details'`)
+      .get() as { name: string } | undefined;
+    assert.equal(table?.name, 'shop_details');
+    db.close();
+  });
+
   it('starts a new database at 0 and leaves it at the highest version', () => {
     const db = freshDb();
     assert.equal(readUserVersion(db), 0);

@@ -3282,6 +3282,16 @@ button.primary:disabled,
   }
 }
 
+/* Store details on the customer page: the five facts on one line when they fit. */
+.store-facts {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin: 10px 0 4px;
+}
+
+.store-facts dd {
+  overflow-wrap: anywhere;
+}
+
 /* Contacts: saved lists over one table. Tabs above, rules as pill buttons. */
 .tabular {
   font-variant-numeric: tabular-nums;

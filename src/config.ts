@@ -126,16 +126,27 @@ function dashboardPassword(): string | null {
   return value;
 }
 
+let warnedDeprecatedIngestToken = false;
+
 /**
- * Shared secret for POST /api/contacts/ingest (machine-to-machine).
+ * Shared secret for every endpoint an app calls (POST /api/identify,
+ * POST /api/contacts/ingest), sent as a bearer token.
  *
  * Separate from DASHBOARD_PASSWORD on purpose: that credential is for a human
- * at a browser; this one is what app producers send as a bearer token. Null
- * disables the endpoint with 503.
+ * at a browser; this one is what app producers send. Null disables the app
+ * endpoints with 503. CONTACTS_INGEST_TOKEN is the old name and is still read
+ * when INGEST_TOKEN is unset.
  */
-function contactsIngestToken(): string | null {
-  const value = process.env.CONTACTS_INGEST_TOKEN?.trim() ?? '';
-  return value ? value : null;
+function ingestToken(): string | null {
+  const value = process.env.INGEST_TOKEN?.trim() ?? '';
+  if (value) return value;
+  const legacy = process.env.CONTACTS_INGEST_TOKEN?.trim() ?? '';
+  if (!legacy) return null;
+  if (!warnedDeprecatedIngestToken) {
+    warnedDeprecatedIngestToken = true;
+    console.warn('CONTACTS_INGEST_TOKEN is deprecated; rename it to INGEST_TOKEN');
+  }
+  return legacy;
 }
 
 /** `:memory:` is passed through verbatim; anything else is a real file path. */
@@ -187,8 +198,8 @@ export interface Config {
      * the gate on; nothing else has to change.
      */
     password: string | null;
-    /** Null disables POST /api/contacts/ingest. */
-    contactsIngestToken: string | null;
+    /** Null disables the app endpoints (identify, contacts ingest). */
+    ingestToken: string | null;
   };
   scope: {
     appIds: string[];
@@ -262,7 +273,7 @@ export function getConfig(): Config {
     },
     auth: {
       password: dashboardPassword(),
-      contactsIngestToken: contactsIngestToken(),
+      ingestToken: ingestToken(),
     },
     scope: {
       appIds: appIds(),

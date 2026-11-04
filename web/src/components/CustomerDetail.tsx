@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import {
   fetchContacts,
   fetchCustomer,
+  fetchShopDetails,
   type CustomerApp,
   type CustomerDetail as Detail,
   type CustomerEventRecord,
   type CustomerSubscription,
+  type ShopDetails,
 } from '../api';
-import { formatCalendarDate, formatFullDate, formatValue } from '../format';
+import { formatCalendarDate, formatFullDate, formatRelative, formatValue } from '../format';
 import { CustomerContacts, toStoreContacts, type StoreContact } from './CustomerContacts';
 import { StatusPill } from './Customers';
 import { Stars } from './Reviews';
@@ -427,6 +429,39 @@ function AppsTable({ rows, currency }: { rows: CustomerApp[]; currency: string |
   );
 }
 
+/** What an app said about the store itself, in a fixed order. */
+function StoreDetails({ details }: { details: ShopDetails | null }) {
+  if (!details) return null;
+  const facts: Array<[string, string | null]> = [
+    ['Store domain', details.primaryDomain],
+    ['Shopify plan', details.shopifyPlan],
+    ['Country', details.country],
+    ['Time zone', details.timezone],
+    ['Currency', details.currency],
+  ];
+  const shown = facts.filter((fact): fact is [string, string] => Boolean(fact[1]));
+  if (shown.length === 0) return null;
+  return (
+    <div className="card full">
+      <div className="card-head">
+        <span className="card-label">Store details</span>
+        <span className="card-collapse-meta">
+          from {details.updatedByAppName ?? details.updatedByApp} · updated{' '}
+          {formatRelative(details.updatedAt)}
+        </span>
+      </div>
+      <dl className="contact-facts store-facts">
+        {shown.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 function SubscriptionTable({
   rows,
   currency,
@@ -497,6 +532,7 @@ export function CustomerDetail({
   const [contacts, setContacts] = useState<StoreContact[] | null>(null);
   const [contactsError, setContactsError] = useState<string | null>(null);
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
+  const [details, setDetails] = useState<ShopDetails | null>(null);
   const tab = section === 'contacts' ? 'contacts' : 'overview';
 
   // Loaded with the page rather than on first click, so the tab can show its
@@ -517,6 +553,21 @@ export function CustomerDetail({
       cancelled = true;
     };
   }, [shopId, appId]);
+
+  // A store with no details is the common case until an app sends them, and a
+  // failed read only hides the card; neither blocks the rest of the page.
+  useEffect(() => {
+    let cancelled = false;
+    setDetails(null);
+    fetchShopDetails(shopId)
+      .then((result) => {
+        if (!cancelled) setDetails(result);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [shopId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -633,6 +684,8 @@ export function CustomerDetail({
               note={detail.lastEventAt ? `Last seen ${formatFullDate(detail.lastEventAt)}` : null}
             />
           </div>
+
+          <StoreDetails details={details} />
 
           <AppsTable rows={detail.apps} currency={detail.currency} />
 

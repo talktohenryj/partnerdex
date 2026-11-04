@@ -235,6 +235,78 @@ Configure an incoming Slack webhook under the **Notifications** tab to receive a
 - **Review events:** New reviews, updated ratings, and removals.
 - **Deduplication:** Alerts are tracked in `notification_deliveries` to ensure no notification is sent twice, even after full database rebuilds.
 
+### Sending data from your app
+Your app can tell PartnerDex about the stores that use it: who works there (contacts) and the same five facts for every store (shop details). PartnerDex shows them on the customer page, and later email features use them as merge fields. Custom attributes, usage events, and app messages get their own subsections when they ship.
+
+#### The token
+Every app endpoint takes the same bearer token. Set `INGEST_TOKEN` on the server and send it as `Authorization: Bearer <token>`. A missing or wrong token answers `401`; an unset `INGEST_TOKEN` answers `503` ("App ingest is disabled. Set INGEST_TOKEN to enable it."). The old variable name, `CONTACTS_INGEST_TOKEN`, still works when `INGEST_TOKEN` is unset.
+
+#### `POST /api/identify`
+One call describes one or more shops. The body is always an array, even for one shop or one person:
+
+```json
+{
+  "shops": [
+    {
+      "appId": "1234567",
+      "myshopifyDomain": "example-candles.myshopify.com",
+      "contacts": [
+        { "email": "owner@example-candles.com", "firstName": "Sam", "lastName": "Example",
+          "role": "owner", "source": "app_capture", "seenAt": "2026-11-04T12:00:00Z" }
+      ],
+      "details": {
+        "primaryDomain": "shop.example-candles.com", "country": "CA", "currency": "CAD",
+        "timezone": "America/Toronto", "shopifyPlan": "Grow"
+      }
+    }
+  ]
+}
+```
+
+- `shops`: 1 to 500 shops. Each needs `appId` and either `shopId` or `myshopifyDomain`.
+- `contacts`: optional, 0 to 500 per shop. Each needs `email`. `role` is `owner`, `staff` (default), or `collaborator`; `seenAt` defaults to now. A contact whose shop PartnerDex does not know is saved unlinked.
+- `details`: optional. Saved only when the shop matches a store PartnerDex knows.
+- Any other field on a shop is skipped and listed in `ignoredFields`, so an app newer than the server never breaks a call.
+
+The answer is `200` with one result per shop, in input order:
+
+```json
+{ "results": [ {
+  "shopId": "1234", "matched": true,
+  "contacts": [ { "matched": "auto", "created": true } ],
+  "details": { "saved": ["primaryDomain", "country", "currency", "timezone", "shopifyPlan"], "ignored": [] },
+  "ignoredFields": []
+} ] }
+```
+
+A malformed body answers `422` with the path in the message, and nothing is written. The cases: `shops` missing or not an array ("shops must be an array"), empty or over 500 ("shops must hold 1 to 500 shops"); `contacts` not an array or over 500 in one shop (for example `shops[0].contacts`); a contact with no email (`shops[3].contacts[0].email is required`); a shop with no `appId`, or with neither `shopId` nor `myshopifyDomain`. An `appId` outside the reporting scope answers `403`.
+
+```bash
+curl -X POST https://partnerdex.example.com/api/identify \
+  -H "Authorization: Bearer $INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"shops":[{"appId":"1234567","myshopifyDomain":"example-candles.myshopify.com","details":{"timezone":"America/Toronto"}}]}'
+```
+
+#### Shop details
+The same five fields for every store, one row per shop. Any app may send them, and the last call wins.
+
+| Field | Check | Example |
+| --- | --- | --- |
+| `primaryDomain` | A host name, no scheme, 253 characters or fewer; stored lower case | `shop.example-candles.com` |
+| `country` | Two letters (ISO 3166-1 alpha-2); stored upper case | `CA` |
+| `currency` | Three letters (ISO 4217); stored upper case | `CAD` |
+| `timezone` | An IANA time zone name | `America/Toronto` |
+| `shopifyPlan` | Text, 100 characters or fewer | `Grow` |
+
+A value that fails its check is listed in `details.ignored` with reason `invalid`, and the old value stays. `null` clears a field. A field the call leaves out is not touched. An unknown key is listed with reason `unknown_key`; every key of a shop that does not match is listed with `shop_not_found`.
+
+#### Custom attributes
+Not available yet. App-specific values (for example a count of gift cards sold) arrive in a later release.
+
+#### `POST /api/contacts/ingest` (deprecated)
+The older one-person endpoint still works and is unchanged. New code should call `POST /api/identify`.
+
 ### Querying from the Command Line
 Use the built-in CLI to pull raw metrics:
 ```bash
@@ -249,7 +321,7 @@ npx partnerdex query mrr --period=last_12_months --asOf=2024-06-30
 The server exposes several endpoints (requires session authentication if `DASHBOARD_PASSWORD` is set):
 - `GET /api/overview`: Retrieve configured metrics.
 - `GET /api/metrics/:metric`: Retrieve details and historical timeseries for a specific metric.
-- `GET /api/customers`: Search and list customer profiles and timelines.
+- `GET /api/customers`: Search and list customer profiles and timelines. `GET /api/customers/:shopId/details` returns a store's shop details, or `null`.
 - `GET /api/contacts`: Search and list people (name, email, linked stores, live store MRR). `PUT /api/contacts/:email/shop` confirms a store match; `PUT /api/contacts/:email/suppression` suppresses or unsuppresses.
 - `GET /api/reviews`: List reviews, ratings, and linking statuses.
 - `GET /api/funnel`: The six funnel steps with per-period counts and conversions. Takes `granularity` (`day`, `week`, `month`, `previous_7_days`), plus the usual `period`/`start`/`end`/`appIds`.

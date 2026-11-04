@@ -97,6 +97,24 @@ CREATE TABLE IF NOT EXISTS audiences (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_audiences_name ON audiences (lower(name));
 `;
 
+/**
+ * Shop details: the same five facts for every store (domain, country, currency,
+ * time zone, Shopify plan). One row per shop; any app may send them, and the
+ * last write wins. Apps read these from Shopify, so they are not app-specific.
+ */
+export const SHOP_DETAILS_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS shop_details (
+  shop_id        TEXT PRIMARY KEY,
+  primary_domain TEXT,
+  country        TEXT,
+  currency       TEXT,
+  timezone       TEXT,
+  shopify_plan   TEXT,
+  updated_at     TEXT NOT NULL,
+  updated_by_app TEXT NOT NULL
+) WITHOUT ROWID;
+`;
+
 export const MIGRATIONS: Migration[] = [
   /*
    * The BigQuery connection stopped carrying per-app and per-spelling settings.
@@ -291,6 +309,12 @@ export const MIGRATIONS: Migration[] = [
     version: 5,
     up: (db) => {
       db.exec(AUDIENCES_SCHEMA_SQL);
+    },
+  },
+  {
+    version: 6,
+    up: (db) => {
+      db.exec(SHOP_DETAILS_SCHEMA_SQL);
     },
   },
 ];
