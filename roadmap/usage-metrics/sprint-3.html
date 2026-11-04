@@ -16,7 +16,7 @@ table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
 .tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:10px 0}
 th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
 tr:last-child td{border-bottom:0}
-code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px;overflow-wrap:anywhere}
 pre{background:var(--code);padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
 .chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
 .todo{background:var(--info-soft);color:var(--info)}.open{background:var(--warn-soft);color:var(--warn)}.done{background:var(--ok-soft);color:var(--ok)}
@@ -46,8 +46,8 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
   app_id           TEXT NOT NULL,
   name             TEXT NOT NULL,
   event_name       TEXT NOT NULL,
-  method           TEXT NOT NULL CHECK (method IN ('count','sum')),
-  property         TEXT,                      -- required when method='sum'
+  method           TEXT NOT NULL CHECK (method IN ('count','sum','unique','max')),
+  property         TEXT,                      -- required for sum, unique, max
   filters          TEXT NOT NULL DEFAULT '[]',-- reserved: [{property, op:'eq', value}]
   show_on_customer INTEGER NOT NULL DEFAULT 1,
   format           TEXT NOT NULL DEFAULT 'number' CHECK (format IN ('number','usd')),
@@ -60,22 +60,26 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 
 <li><b>Aggregator — <code>src/usage/compute.ts</code> (new)</b>
 <code>aggregateMetric(metric, { shopId?: string, from: string, to: string }, db): number</code>.
-<pre>SELECT {method = count ? COUNT(*) : COALESCE(SUM(CAST(json_extract(properties, @path) AS REAL)), 0)}
+<pre>SELECT {count:  COUNT(*)
+        sum:    COALESCE(SUM(CAST(json_extract(properties, @path) AS REAL)), 0)
+        unique: COUNT(DISTINCT json_extract(properties, @path))          -- NULLs not counted
+        max:    COALESCE(MAX(CAST(json_extract(properties, @path) AS REAL)), 0)}
   FROM usage_events
  WHERE app_id = @appId AND event_name = @eventName
    AND occurred_at &gt;= @from AND occurred_at &lt; @to
    [AND shop_id = @shopId]</pre>
-<code>@path = '$."' + property + '"'</code> (quoted, so camelCase and dots are safe); <code>property</code> validated against <code>/^[A-Za-z0-9_]{1,64}$/</code> at save. One function — S4 and S5 call it, nothing else re-implements the sum.</li>
+<code>@path = '$."' + property + '"'</code> (quoted, so camelCase and dots are safe); <code>property</code> validated against <code>/^[A-Za-z0-9_]{1,64}$/</code> at save. One function — S4 and S5 call it, nothing else re-implements the sum. The four methods match Mantle's usage metrics (<code>mantle-brain</code>, analytics-reports §4.14), minus its billing-only sums.</li>
 
 <li><b>Windows — <code>src/usage/windows.ts</code> (new)</b>
-<code>resolveUsageWindow(key, now, timezone)</code> for <code>24h, 7d, 30d, 90d, 365d, mtd, all</code> → <code>{from, to}</code> ISO. Month-to-date uses <code>REPORTING_TIMEZONE</code> through the helpers in <code>src/metrics/time.ts</code>, so "this month" means the same thing as on the revenue page. Mantle's "current billing period" is dropped: PartnerDex would need the shop's billing anchor; see S5.</li>
+<code>resolveUsageWindow(key, now, timezone)</code> for <code>24h, 7d, 28d, 30d, 90d, 365d, mtd, all</code> → <code>{from, to}</code> ISO. Month-to-date uses <code>REPORTING_TIMEZONE</code> through the helpers in <code>src/metrics/time.ts</code>, so "this month" means the same thing as on the revenue page. Mantle's "current billing period" is dropped: PartnerDex would need the shop's billing anchor; see S5.<br>
+<b>Previous period:</b> <code>previousWindow({from, to})</code> → the window of the same length that ends at <code>from</code> (7d → the 7 days before it). <b>Offset windows:</b> <code>resolveUsageWindow(key, now, timezone, { endOffsetDays })</code> ends the window <code>endOffsetDays</code> before now, so "the 4 weeks before this week" is the new key <code>28d</code> with <code>endOffsetDays: 7</code>. Email S6 needs both for its comparison numbers.</li>
 
 <li><b>Store — <code>src/usage/metrics.ts</code> (new)</b>
-<code>listUsageMetrics(appId?)</code>, <code>createUsageMetric(input)</code>, <code>updateUsageMetric(id, input)</code>, <code>deleteUsageMetric(id)</code>, <code>reorderUsageMetrics(ids)</code>. Validation: <code>sum</code> needs <code>property</code>; <code>count</code> clears it; <code>assertAppInScope</code>; name unique per app → 409.</li>
+<code>listUsageMetrics(appId?)</code>, <code>createUsageMetric(input)</code>, <code>updateUsageMetric(id, input)</code>, <code>deleteUsageMetric(id)</code>, <code>reorderUsageMetrics(ids)</code>. Validation: <code>sum</code>, <code>unique</code>, and <code>max</code> need <code>property</code>; <code>count</code> clears it; <code>assertAppInScope</code>; name unique per app → 409.</li>
 
 <li><b>Routes — <code>src/server/usage.ts</code></b> (dashboard router from S1, behind <code>requireAuth</code>)
 <code>GET /metrics</code>, <code>POST /metrics</code>, <code>PUT /metrics/:id</code>, <code>DELETE /metrics/:id</code>, <code>PUT /metrics/order</code>.
-<code>GET /metrics/preview?appId&amp;eventName&amp;method&amp;property&amp;window&amp;shopId</code> → <code>{ value, events: [last 20 matching rows] }</code> — works on an unsaved form, like Mantle's right-hand panel.
+<code>GET /metrics/preview?appId&amp;eventName&amp;method&amp;property&amp;window&amp;shopId&amp;compare=previous</code> → <code>{ value, previousValue?, events: [last 20 matching rows] }</code> (<code>previousValue</code> only with <code>compare=previous</code>) — works on an unsaved form, like Mantle's right-hand panel.
 <code>GET /properties?appId&amp;eventName</code> → distinct JSON keys seen in the last 500 events (<code>json_each</code>), for the "Property to sum" picker.</li>
 
 <li><b>Page — <code>web/src/components/UsageMetrics.tsx</code> (new)</b>
@@ -96,10 +100,14 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 <tr><td>Count metric over 3 events, one outside the window</td><td>2</td></tr>
 <tr><td>Event on 2026-09-30 23:30 New York, window <code>mtd</code> on 2026-10-02, <code>REPORTING_TIMEZONE=America/New_York</code></td><td>Excluded</td></tr>
 <tr><td><code>usage:seed-izigift</code> run twice</td><td>9 metrics, not 18</td></tr>
+<tr><td>Unique over <code>customerId</code>, events with customers A, A, B, and one without the property</td><td>2</td></tr>
+<tr><td>Max over <code>usdOrderTotal</code> with 13.03, 47.86</td><td>47.86</td></tr>
+<tr><td>Preview 7d with <code>compare=previous</code>, 2 events this week, 5 the week before</td><td><code>{ value: 2, previousValue: 5 }</code></td></tr>
+<tr><td><code>28d</code> with <code>endOffsetDays: 7</code> on 2026-11-09</td><td>From 2026-10-05 to 2026-11-02 (reporting time zone)</td></tr>
 </table></div>
 
 <h2>Explicitly NOT in this sprint</h2>
-<ul><li>Showing values on the customer page (S4).</li><li>Filter-by-property UI (column reserved).</li><li>Average / unique-count methods.</li><li>Billing-period window.</li></ul>
+<ul><li>Showing values on the customer page (S4).</li><li>Filter-by-property UI (column reserved).</li><li>Average method.</li><li>Billing-period window.</li></ul>
 
 <h2>Tests — <code>test/usageMetrics.test.ts</code></h2>
 <ul>
@@ -108,6 +116,7 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 <li><code>counts events inside the half-open window only</code></li>
 <li><code>scopes the aggregate to one shop</code></li>
 <li><code>resolves mtd in the reporting timezone</code></li>
+<li><code>unique counts distinct non-null values</code> · <code>max returns the largest value</code> · <code>previous window has the same length</code> · <code>offset window ends days before now</code></li>
 <li><code>rejects sum without property and duplicate names</code></li>
 <li><code>rejects a property name with a quote or path characters</code></li>
 <li><code>preview works on an unsaved definition</code></li>

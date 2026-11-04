@@ -123,7 +123,7 @@ Add <code>USAGE_EVENTS: PageSpec</code> (<code>id: 'usage-events'</code>, <code>
 <li><code>rolls back the whole batch when one event is invalid</code></li>
 <li><code>accepts a 500-event batch above the global 64kb body limit</code></li>
 <li><code>usage_events survives rebuildDerivedTables</code></li>
-<li><code>migration 9 creates usage_events and is idempotent on replay</code> (extend <code>test/migrate.test.ts</code> sequence check: 1,2,3,4)</li>
+<li><code>migration 9 creates usage_events and is idempotent on replay</code> (the existing <code>test/migrate.test.ts</code> check: 1..9 in order)</li>
 <li><code>contacts ingest keeps its 503/401 messages</code> (existing suite, must stay green)</li>
 </ul>
 

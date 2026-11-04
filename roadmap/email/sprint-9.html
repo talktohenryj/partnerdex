@@ -78,6 +78,14 @@ ol.build>li{margin:0 0 14px}ol.build b{display:block}
 <li><b>Upstream fit.</b> Is automation generic enough to go upstream, or fork-only?</li>
 </ol>
 
+<h2>Trigger list from Mantle (reference, 2026-11-04)</h2>
+<p>Mantle's own rebuild guide (<code>Hey-Mantle/mantle-brain</code>, <code>flows/README.md</code>) splits triggers into two kinds. Use the same split here.</p>
+<ul>
+<li><b>Raw — something just happened.</b> PartnerDex already sees these from the Partner API (<code>customer_events</code>): installed, uninstalled, reinstalled, deactivated, reactivated, reviewed, review edited; subscribed, unsubscribed, upgraded, downgraded, resubscribed, frozen, unfrozen; one-time charge, refund. Apps add more through identify (S2: "first identify", an attribute changed) and Usage Metrics (a usage event arrived).</li>
+<li><b>Derived — a moment relative to the data.</b> Nothing pushes these; a schedule finds them: trial expiring in N days, trial expired, win-back eligible (cancelled N days ago, no resubscribe), usage crossed a threshold, "N days after X". Each needs a <b>fire-once guard</b> keyed on (person or shop, trigger, period) — the same idea as S5's <code>period</code> key — so a daily scan does not send the same email every day.</li>
+<li><b>Waits</b> between steps ("then 3 days later") are scheduled wake-ups, not triggers.</li>
+</ul>
+<p>Mantle also enriched uninstalls with a churn reason (often an LLM classifier). PartnerDex reads uninstall reasons already; decide here whether a flow branches on them.</p>
 <h2>What v1 already gives v2</h2>
 <ul>
 <li>The audience resolver (S1) — an automation's "who" is the same definition plus a trigger.</li>
