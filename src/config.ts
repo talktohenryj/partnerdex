@@ -149,6 +149,44 @@ function ingestToken(): string | null {
   return legacy;
 }
 
+/**
+ * PUBLIC_BASE_URL: where people outside the dashboard reach this server — the
+ * unsubscribe and preference links in every email point here. https only,
+ * except for localhost during development. Stored without a trailing slash.
+ */
+function publicBaseUrl(): string | null {
+  const raw = process.env.PUBLIC_BASE_URL?.trim() ?? '';
+  if (!raw) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new ConfigError(`PUBLIC_BASE_URL must be a URL such as https://partnerdex.example.com, got "${raw}".`);
+  }
+  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  if (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) {
+    throw new ConfigError(`PUBLIC_BASE_URL must use https (http is allowed only for localhost), got "${raw}".`);
+  }
+  if (url.search || url.hash) {
+    throw new ConfigError(`PUBLIC_BASE_URL must not have a query or fragment, got "${raw}".`);
+  }
+  return `${url.origin}${url.pathname}`.replace(/\/+$/, '');
+}
+
+/**
+ * EMAIL_LINK_SECRET signs the unsubscribe and preference links. Changing it
+ * breaks every link in every email already sent, so it is not derived from
+ * anything else.
+ */
+function emailLinkSecret(): string | null {
+  const value = process.env.EMAIL_LINK_SECRET?.trim() ?? '';
+  if (!value) return null;
+  if (value.length < 32) {
+    throw new ConfigError('EMAIL_LINK_SECRET must be at least 32 characters. Leave it empty to turn sending off.');
+  }
+  return value;
+}
+
 /** `:memory:` is passed through verbatim; anything else is a real file path. */
 function databasePath(): string {
   const raw = optional('DATABASE_PATH', './data/partnerdex.db');
@@ -251,6 +289,16 @@ export interface Config {
     trustProxy: boolean;
   };
   reporting: ReportingDefaults;
+  /**
+   * Sending email. Any of the three unset turns sending off; the sender
+   * name, address, and footer live in the database and are entered in the
+   * dashboard.
+   */
+  email: {
+    resendApiKey: string | null;
+    publicBaseUrl: string | null;
+    linkSecret: string | null;
+  };
 }
 
 let cached: Config | null = null;
@@ -298,6 +346,11 @@ export function getConfig(): Config {
       trialMinGapDays: int('TRIAL_MIN_GAP_DAYS', 2),
       churnWindowDays: int('CHURN_WINDOW_DAYS', 30),
       churnOnUninstall: bool('CHURN_ON_UNINSTALL', true),
+    },
+    email: {
+      resendApiKey: process.env.RESEND_API_KEY?.trim() || null,
+      publicBaseUrl: publicBaseUrl(),
+      linkSecret: emailLinkSecret(),
     },
   };
 

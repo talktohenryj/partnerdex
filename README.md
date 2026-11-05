@@ -17,6 +17,7 @@ PartnerDex provides a privacy-first, fully customizable, self-hosted analytics d
 - **Self-Hosted & Private:** All fetched data is stored in a local SQLite database on your own infrastructure. No third-party servers are involved.
 - **Comprehensive Lifecycle Insights:** Reconstructs detailed customer lifecycles, uninstall timelines, trials, churn, App Store reviews, and revenue analytics.
 - **Install Funnel:** Listing page view → Add app click → install → trial → conversion → review, with the count and step-over-step conversion for every period. The two pre-install steps are read from the GA4 BigQuery export and the last from the crawled App Store listing; where either is unavailable those steps are reported as unmeasurable rather than as zero.
+- **Email to your merchants:** Plain founder-style emails to a saved audience, sent through Resend, with a test send, a typed-count confirmation, a resumable send, one-click unsubscribe per email type, and a postal footer.
 - **Slack Notifications:** Real-time, deduplicated alerts for subscription events (starts, upgrades, churn) and App Store review changes.
 - **CLI & HTTP API:** Query metrics directly from the command line, export custom intervals, or connect your own reporting tools.
 
@@ -307,6 +308,13 @@ Not available yet. App-specific values (for example a count of gift cards sold) 
 #### `POST /api/contacts/ingest` (deprecated)
 The older one-person endpoint still works and is unchanged. New code should call `POST /api/identify`.
 
+### Sending email
+The **Email** page sends one plain email to a saved audience from the Contacts page. Sending is off until `DASHBOARD_PASSWORD`, `RESEND_API_KEY`, `PUBLIC_BASE_URL`, and `EMAIL_LINK_SECRET` are set and the sender is filled in under **Email → Settings**. The From address's domain must be verified in Resend.
+
+- **Compose:** a subject, preview text, and a body in light Markdown (paragraphs, `**bold**`, `*italic*`, `[links](https://…)`). Merge fields such as `{{first_name|there}}` and `{{shop_name}}` fill in per recipient; the text after `|` is the fallback when the value is blank. `{{button "Open your orders" page="orders"}}` adds a button to a page of your app in the recipient's Shopify admin, from the pages listed under **App links**.
+- **Send:** *Review and send* freezes the recipient list and the sender. You type the count to confirm. The send goes out in batches of 100 and resumes after a restart without sending twice.
+- **Unsubscribe:** every email has a `List-Unsubscribe` one-click header and a footer link to a preference page at `PUBLIC_BASE_URL/p/…`, where the recipient turns email types on or off. Account notices cannot be turned off. An unsubscribe does not suppress the contact.
+
 ### Querying from the Command Line
 Use the built-in CLI to pull raw metrics:
 ```bash
@@ -353,6 +361,7 @@ Partner API ──┬── app.events ─────┐
 - `src/appstore/`: Web scraper for App Store listings and reviews.
 - `src/bigquery/`: GA4 export connection, credential handling, and listing-traffic ingest.
 - `src/notifications/`: Slack webhook dispatcher and templates.
+- `src/email/`: Email campaigns, rendering, the Resend transport, the send loop, and unsubscribe preferences.
 - `web/`: Frontend dashboard single page application (Vite/React).
 
 ### Database Validation and Integrity

@@ -60,6 +60,11 @@ primary_region = "<your-region>"
   # Machine-to-machine bearer for the app endpoints, POST /api/identify and
   # POST /api/contacts/ingest (not the dashboard password).
   # INGEST_TOKEN = "<your-ingest-token>"
+  # Sending email (Email page). Set all three with `fly secrets set` to turn it
+  # on; leave them unset to keep sending off.
+  # RESEND_API_KEY = "<your-resend-api-key>"
+  # PUBLIC_BASE_URL = "https://<your-app>.fly.dev"
+  # EMAIL_LINK_SECRET = "<at least 32 random characters>"
 
 [mounts]
   source = "partnerdex_data"

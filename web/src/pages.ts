@@ -63,7 +63,7 @@ export interface PageSpec {
    * Reviews is the one page that is both: cards over the shared window, and a
    * searchable list of the documents behind them.
    */
-  kind?: 'metrics' | 'customers' | 'contacts' | 'notifications' | 'reviews' | 'listings' | 'funnel' | 'bigquery';
+  kind?: 'metrics' | 'customers' | 'contacts' | 'email' | 'notifications' | 'reviews' | 'listings' | 'funnel' | 'bigquery';
   /**
    * Which shared filters this page shows, in order.
    *
@@ -309,6 +309,15 @@ const CUSTOMERS: PageSpec = {
   children: [CONTACTS],
 };
 
+const EMAIL: PageSpec = {
+  id: 'email',
+  label: 'Email',
+  title: 'Email',
+  blurb: 'Write to the people in your audiences, and see what happened to each email.',
+  kind: 'email',
+  cards: [],
+};
+
 const REVIEWS: PageSpec = {
   id: 'reviews',
   label: 'Reviews',
@@ -399,7 +408,7 @@ const BIGQUERY: PageSpec = {
 };
 
 export const NAV: NavGroup[] = [
-  { label: '', pages: [OVERVIEW, CUSTOMERS] },
+  { label: '', pages: [OVERVIEW, CUSTOMERS, EMAIL] },
   { label: 'Reports', pages: [REVENUE, SUBSCRIPTIONS, CHURN, FUNNEL, REVIEWS] },
   { label: 'Settings', pages: [LISTINGS, BIGQUERY, NOTIFICATIONS] },
 ];

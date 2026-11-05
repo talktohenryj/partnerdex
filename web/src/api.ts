@@ -897,3 +897,137 @@ export const testChannel = (
   id: string,
 ): Promise<{ ok: boolean; error: string | null; channel: NotificationChannel }> =>
   sendJson('POST', `${CHANNELS}/${encodeURIComponent(id)}/test`);
+
+/* ----------------------------------------------------------------- email */
+
+export interface EmailSender {
+  fromName: string;
+  fromEmail: string;
+  replyTo: string;
+  footerAddress: string;
+  buttonColor: string;
+}
+
+export interface EmailSettingsResponse {
+  settings: EmailSender & { updatedAt: string | null };
+  blockedReason: string | null;
+  types: Array<{ key: string; label: string; description: string; canUnsubscribe: boolean }>;
+  mergeFields: string[];
+}
+
+export type DomainStatus = 'verified' | 'pending' | 'failed' | 'not_found';
+
+export interface AppPage {
+  key: string;
+  label: string;
+  path: string;
+}
+
+export interface AppLinks {
+  appId: string;
+  adminHandle: string;
+  pages: AppPage[];
+  updatedAt: string | null;
+}
+
+export type CampaignStatus = 'draft' | 'ready' | 'sending' | 'sent' | 'cancelled' | 'failed';
+
+export interface EmailCampaign {
+  id: string;
+  name: string;
+  subject: string;
+  previewText: string;
+  body: string;
+  audience: AudienceDefinition;
+  audienceId: string | null;
+  audienceName: string | null;
+  emailType: string;
+  status: CampaignStatus;
+  sender: EmailSender | null;
+  recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  skippedCount: number;
+  counts: Record<'queued' | 'sending' | 'sent' | 'failed' | 'skipped', number>;
+  createdAt: string;
+  updatedAt: string;
+  preparedAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface CampaignInput {
+  name?: string;
+  audienceId?: string;
+  subject?: string;
+  previewText?: string;
+  body?: string;
+  emailType?: string;
+}
+
+export interface RenderedPreview {
+  subject: string;
+  text: string;
+  html: string;
+  from: string;
+  replyTo: string;
+  to: string;
+}
+
+export interface PrepareResult {
+  count: number;
+  excluded: { suppressed: number; ambiguous: number; noStatus: number; merged: number; unsubscribedType: number };
+  typeLabel: string;
+  sample: Array<{ email: string; firstName: string | null; shopName: string | null }>;
+  missingFirstName: number;
+  missingPageLinks: number;
+  sender: EmailSender;
+  from: string;
+}
+
+export const fetchEmailSettings = (): Promise<EmailSettingsResponse> =>
+  getJson<EmailSettingsResponse>('/api/email/settings');
+
+export const saveEmailSettings = (
+  settings: EmailSender,
+): Promise<{ settings: EmailSender & { updatedAt: string | null }; blockedReason: string | null }> =>
+  sendJson('PUT', '/api/email/settings', settings);
+
+export const fetchSenderDomain = (): Promise<{ domain: string | null; status: DomainStatus | null; blockedReason: string | null }> =>
+  getJson('/api/email/settings/domain');
+
+export const fetchAppLinks = (appId: string): Promise<AppLinks> =>
+  getJson(`/api/email/apps/${encodeURIComponent(appId)}/links`);
+
+export const saveAppLinks = (appId: string, links: { adminHandle: string; pages: AppPage[] }): Promise<AppLinks> =>
+  sendJson('PUT', `/api/email/apps/${encodeURIComponent(appId)}/links`, links);
+
+export const fetchCampaigns = (): Promise<{ campaigns: EmailCampaign[]; blockedReason: string | null }> =>
+  getJson('/api/email/campaigns');
+
+export const fetchCampaign = (id: string): Promise<EmailCampaign> =>
+  getJson(`/api/email/campaigns/${encodeURIComponent(id)}`);
+
+export const createCampaign = (input: CampaignInput): Promise<EmailCampaign> =>
+  sendJson('POST', '/api/email/campaigns', input);
+
+export const updateCampaign = (id: string, input: CampaignInput): Promise<EmailCampaign> =>
+  sendJson('PUT', `/api/email/campaigns/${encodeURIComponent(id)}`, input);
+
+export const deleteCampaign = (id: string): Promise<void> =>
+  sendJson('DELETE', `/api/email/campaigns/${encodeURIComponent(id)}`);
+
+export const renderCampaign = (id: string): Promise<RenderedPreview> =>
+  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/render`);
+
+export const sendTestEmail = (id: string, to: string): Promise<{ id: string; to: string; subject: string }> =>
+  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/test`, { to });
+
+export const prepareCampaign = (id: string): Promise<PrepareResult> =>
+  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/prepare`);
+
+export const sendCampaign = (id: string, confirmCount: number): Promise<EmailCampaign> =>
+  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/send`, { confirmCount });
+
+export const cancelCampaign = (id: string): Promise<EmailCampaign> =>
+  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/cancel`);

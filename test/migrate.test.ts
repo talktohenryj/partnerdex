@@ -110,6 +110,29 @@ describe('migration runner', () => {
     db.close();
   });
 
+  it('migrations are 1..7 in order and 7 creates the email send tables', () => {
+    assert.ok(MIGRATIONS.length >= 7, 'compose + send ships as migration 7');
+    assert.equal(MIGRATIONS[6]!.version, 7);
+    const db = freshDb();
+    migrate(db);
+    const tables = (
+      db
+        .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'email_%' OR name = 'app_links'`)
+        .all() as Array<{ name: string }>
+    ).map((row) => row.name);
+    for (const name of ['email_settings', 'app_links', 'email_types', 'email_preferences', 'email_campaigns', 'email_sends']) {
+      assert.ok(tables.includes(name), `missing ${name}`);
+    }
+    const types = db.prepare('SELECT key, can_unsubscribe FROM email_types ORDER BY sort').all();
+    assert.deepEqual(types, [
+      { key: 'product_updates', can_unsubscribe: 1 },
+      { key: 'weekly_recap', can_unsubscribe: 1 },
+      { key: 'tips', can_unsubscribe: 1 },
+      { key: 'account_notices', can_unsubscribe: 0 },
+    ]);
+    db.close();
+  });
+
   it('starts a new database at 0 and leaves it at the highest version', () => {
     const db = freshDb();
     assert.equal(readUserVersion(db), 0);

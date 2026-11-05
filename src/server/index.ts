@@ -27,6 +27,9 @@ import { sendError } from './errors.js';
 import { notificationsRouter } from './notifications.js';
 import { listingsRouter } from './listings.js';
 import { bigqueryRouter } from './bigquery.js';
+import { emailRouter } from './email.js';
+import { preferencesRouter } from './preferences.js';
+import { startEmailRunner } from '../email/runner.js';
 import { listAppSources } from '../bigquery/connection.js';
 import { funnelReport } from '../metrics/reports/funnel.js';
 
@@ -112,6 +115,11 @@ export function createApp(): express.Express {
   // cookie. Must sit ahead of requireAuth so producers can POST without a session.
   app.use('/api/contacts', contactsRouter());
 
+  // The email-preference page that unsubscribe links open. Public: the signed
+  // token in the link is the credential. Ahead of the SPA fallback, and with
+  // its own small form parser, because it is a plain HTML form.
+  app.use('/p', express.urlencoded({ extended: false, limit: '2kb' }), preferencesRouter());
+
   /*
    * Everything below reads the store, so everything below is gated. The static
    * dashboard bundle deliberately is not: it holds no data, and it has to load
@@ -124,6 +132,7 @@ export function createApp(): express.Express {
   app.use('/api/bigquery', bigqueryRouter());
   app.use('/api/contacts', contactsDashboardRouter());
   app.use('/api/audiences', audiencesRouter());
+  app.use('/api/email', emailRouter());
 
   /**
    * The install funnel.
@@ -448,5 +457,8 @@ export function serve(): void {
             `Set SYNC_INTERVAL_MINUTES=0 to turn it off.`
         : 'partnerdex background sync is off (SYNC_INTERVAL_MINUTES=0). Run `partnerdex sync`.',
     );
+
+    const emailOff = startEmailRunner();
+    console.log(emailOff ? `partnerdex email sending is off: ${emailOff}` : 'partnerdex email sending is on.');
   });
 }

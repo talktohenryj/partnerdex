@@ -115,6 +115,112 @@ CREATE TABLE IF NOT EXISTS shop_details (
 ) WITHOUT ROWID;
 `;
 
+/**
+ * Sending email: the sender settings, the per-app admin links that page
+ * buttons open, campaigns, one row per recipient per campaign, and the email
+ * types a recipient can turn off one by one. Role 4 — none of it can be
+ * re-synced. The S4 event columns on email_sends (delivered_at … complained_at)
+ * ship now so the webhook sprint needs no migration.
+ *
+ * An unsubscribe lives in email_preferences, not in contact_suppressions: a
+ * person who turns off the weekly recap still wants account notices, and a
+ * suppression would stop both.
+ */
+export const EMAIL_SEND_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS email_settings (
+  id             INTEGER PRIMARY KEY CHECK (id = 1),
+  from_name      TEXT NOT NULL DEFAULT '',
+  from_email     TEXT NOT NULL DEFAULT '',
+  reply_to       TEXT NOT NULL DEFAULT '',
+  footer_address TEXT NOT NULL DEFAULT '',
+  button_color   TEXT NOT NULL DEFAULT '#2e72d2',
+  updated_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_links (
+  app_id       TEXT PRIMARY KEY,
+  admin_handle TEXT NOT NULL,
+  pages        TEXT NOT NULL DEFAULT '[]',
+  updated_at   TEXT NOT NULL
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS email_types (
+  key             TEXT PRIMARY KEY,
+  label           TEXT NOT NULL,
+  description     TEXT NOT NULL,
+  can_unsubscribe INTEGER NOT NULL DEFAULT 1,
+  sort            INTEGER NOT NULL
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS email_preferences (
+  email      TEXT NOT NULL,
+  type_key   TEXT NOT NULL,
+  subscribed INTEGER NOT NULL,
+  source     TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (email, type_key)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS email_campaigns (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  subject         TEXT NOT NULL DEFAULT '',
+  preview_text    TEXT NOT NULL DEFAULT '',
+  body            TEXT NOT NULL DEFAULT '',
+  audience        TEXT NOT NULL,
+  audience_id     TEXT,
+  email_type      TEXT NOT NULL DEFAULT 'product_updates',
+  status          TEXT NOT NULL DEFAULT 'draft',
+  from_name       TEXT,
+  from_email      TEXT,
+  reply_to        TEXT,
+  footer_address  TEXT,
+  button_color    TEXT,
+  recipient_count INTEGER NOT NULL DEFAULT 0,
+  sent_count      INTEGER NOT NULL DEFAULT 0,
+  failed_count    INTEGER NOT NULL DEFAULT 0,
+  skipped_count   INTEGER NOT NULL DEFAULT 0,
+  batch_seq       INTEGER NOT NULL DEFAULT 0,
+  batch_started_at TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  prepared_at     TEXT,
+  started_at      TEXT,
+  finished_at     TEXT
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS email_sends (
+  campaign_id     TEXT NOT NULL,
+  email           TEXT NOT NULL,
+  shop_id         TEXT NOT NULL,
+  merge           TEXT NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'queued',
+  skip_reason     TEXT,
+  batch_key       TEXT,
+  resend_id       TEXT,
+  error           TEXT,
+  sent_at         TEXT,
+  delivered_at    TEXT,
+  opened_at       TEXT,
+  clicked_at      TEXT,
+  bounced_at      TEXT,
+  complained_at   TEXT,
+  unsubscribed_at TEXT,
+  PRIMARY KEY (campaign_id, email)
+) WITHOUT ROWID;
+
+CREATE INDEX IF NOT EXISTS idx_email_sends_status ON email_sends (campaign_id, status);
+CREATE INDEX IF NOT EXISTS idx_email_sends_resend ON email_sends (resend_id) WHERE resend_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_email_sends_email ON email_sends (email);
+
+INSERT INTO email_types (key, label, description, can_unsubscribe, sort) VALUES
+  ('product_updates', 'Product updates', 'New features and what changed in the app.', 1, 1),
+  ('weekly_recap', 'Weekly recap', 'A summary of your week in the app.', 1, 2),
+  ('tips', 'Tips and setup help', 'Short guides to get more out of the app.', 1, 3),
+  ('account_notices', 'Account notices', 'Trial ending, billing problems. Sent only when something needs you.', 0, 4)
+ON CONFLICT(key) DO NOTHING;
+`;
+
 export const MIGRATIONS: Migration[] = [
   /*
    * The BigQuery connection stopped carrying per-app and per-spelling settings.
@@ -315,6 +421,12 @@ export const MIGRATIONS: Migration[] = [
     version: 6,
     up: (db) => {
       db.exec(SHOP_DETAILS_SCHEMA_SQL);
+    },
+  },
+  {
+    version: 7,
+    up: (db) => {
+      db.exec(EMAIL_SEND_SCHEMA_SQL);
     },
   },
 ];

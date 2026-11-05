@@ -6,6 +6,8 @@ import { TimeRangeError } from '../metrics/time.js';
 import { NotificationError } from '../notifications/store.js';
 import { ListingError } from '../appstore/listings.js';
 import { BigQueryError } from '../bigquery/connection.js';
+import { EmailError } from '../email/errors.js';
+import { TransportError } from '../email/transport.js';
 
 /**
  * The one place an exception becomes a status code.
@@ -37,6 +39,15 @@ export function sendError(response: express.Response, error: unknown): void {
   }
   if (error instanceof BigQueryError) {
     response.status(error.status).json({ error: error.message });
+    return;
+  }
+  if (error instanceof EmailError) {
+    response.status(error.status).json({ error: error.message, ...(error.field ? { field: error.field } : {}) });
+    return;
+  }
+  // Resend said no to something a person asked for (a test, a domain check).
+  if (error instanceof TransportError) {
+    response.status(502).json({ error: error.message });
     return;
   }
   if (error instanceof TimeRangeError) {

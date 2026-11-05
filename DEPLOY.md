@@ -158,6 +158,18 @@ fly ssh console -C "node /app/dist/cli.js contacts:import --from=/data/contacts.
 
 Set `INGEST_TOKEN` (Fly secret) before any app producer starts calling `POST /api/identify` or `POST /api/contacts/ingest`. An install that still sets the old name, `CONTACTS_INGEST_TOKEN`, keeps working and logs one deprecation line at startup; to rename it, run `fly secrets set INGEST_TOKEN=<the current value>` before the deploy and `fly secrets unset CONTACTS_INGEST_TOKEN` after it.
 
+### Sending email
+
+The Email page sends through [Resend](https://resend.com). Sending stays off until all of these are set:
+
+```bash
+fly secrets set RESEND_API_KEY=<key> PUBLIC_BASE_URL=https://<your-app>.fly.dev EMAIL_LINK_SECRET=$(openssl rand -hex 32)
+```
+
+`DASHBOARD_PASSWORD` must be set too. Then open **Email → Settings**, fill in the sender and the postal footer, and verify the From address's domain in Resend. `PUBLIC_BASE_URL` must be the public address, because the unsubscribe links in every email point at `/p/…` on it. Do not change `EMAIL_LINK_SECRET` later: it breaks the unsubscribe links in emails already sent.
+
+A deploy during a send is safe. The send resumes after the restart, and Resend's idempotency key stops a batch going out twice.
+
 ### Resilient Redeploys
 During deployments, the running container stops and restarts, which may interrupt an active sync loop. This is completely safe; PartnerDex's synchronization logic is fully incremental, re-reading records from a 3-day overlap window prior to the last known watermark to catch late-arriving events.
 
