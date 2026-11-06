@@ -36,7 +36,7 @@ import { getEmailType, listEmailTypes } from './types.js';
  * to a ready campaign throws the list away and puts it back to draft.
  */
 
-export type CampaignStatus = 'draft' | 'ready' | 'sending' | 'sent' | 'cancelled' | 'failed';
+export type CampaignStatus = 'draft' | 'ready' | 'sending' | 'paused' | 'sent' | 'cancelled' | 'failed';
 export type SendStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'skipped';
 
 export interface Campaign {
@@ -56,6 +56,8 @@ export interface Campaign {
   failedCount: number;
   skippedCount: number;
   counts: Record<SendStatus, number>;
+  /** The send pauses by itself when sent + failed reaches this. */
+  pauseAt: number | null;
   createdAt: string;
   updatedAt: string;
   preparedAt: string | null;
@@ -84,6 +86,7 @@ interface CampaignRow {
   skipped_count: number;
   batch_seq: number;
   batch_started_at: string | null;
+  pause_at: number | null;
   created_at: string;
   updated_at: string;
   prepared_at: string | null;
@@ -151,6 +154,7 @@ function toCampaign(row: CampaignRow, db: Db): Campaign {
     failedCount: row.failed_count,
     skippedCount: row.skipped_count,
     counts: statusCounts(row.id, db),
+    pauseAt: row.pause_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     preparedAt: row.prepared_at,
@@ -762,7 +766,33 @@ export function onSendStarted(listener: (() => void) | null): void {
   onStart = listener;
 }
 
-export function startSend(id: string, confirmCount: unknown, db: Db = getDb(), clock = Date.now): Campaign {
+export const PAUSE_CHOICES = [5, 10, 25] as const;
+
+/** null = send everything; else a count of 1 to 1,000 emails before the send pauses. */
+function cleanPauseAfter(value: unknown): number | null {
+  if (value === undefined || value === null || value === '' || value === false) return null;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 1000) {
+    throw new EmailError('Pause after must be a whole number from 1 to 1,000.', 422, 'pauseAfter');
+  }
+  return n;
+}
+
+function wake(): void {
+  onStart?.();
+}
+
+/**
+ * Start the send. With `pauseAfter`, the send loop sends that many emails,
+ * then sets the campaign to paused until someone resumes or cancels it.
+ */
+export function startSend(
+  id: string,
+  confirmCount: unknown,
+  db: Db = getDb(),
+  clock = Date.now,
+  pauseAfter: unknown = null,
+): Campaign {
   assertCanSend(db);
   const row = requireRow(id, db);
   if (row.status !== 'ready') {
@@ -777,12 +807,104 @@ export function startSend(id: string, confirmCount: unknown, db: Db = getDb(), c
   if (!row.prepared_at || clock() - Date.parse(row.prepared_at) > PREPARE_MAX_AGE_MS) {
     throw new EmailError('The list is over an hour old. Prepare it again.', 409);
   }
+  const first = cleanPauseAfter(pauseAfter);
+  const pauseAt = first !== null && first < row.recipient_count ? first : null;
   const at = new Date(clock()).toISOString();
   db.prepare(
-    `UPDATE email_campaigns SET status = 'sending', started_at = ?, updated_at = ? WHERE id = ? AND status = 'ready'`,
-  ).run(at, at, id);
-  onStart?.();
+    `UPDATE email_campaigns SET status = 'sending', pause_at = ?, started_at = ?, updated_at = ?
+      WHERE id = ? AND status = 'ready'`,
+  ).run(pauseAt, at, at, id);
+  wake();
   return getCampaign(id, db)!;
+}
+
+/** Stop after the batch in flight. Nothing queued is lost; resume sends it. */
+export function pauseCampaign(id: string, db: Db = getDb()): Campaign {
+  const row = requireRow(id, db);
+  if (row.status !== 'sending') throw new EmailError(`This campaign is ${row.status} and cannot be paused.`, 409);
+  const counts = statusCounts(id, db);
+  if (counts.queued === 0) throw new EmailError('Every email has gone out already.', 409);
+  db.prepare(`UPDATE email_campaigns SET status = 'paused', pause_at = NULL, updated_at = ? WHERE id = ?`).run(now(), id);
+  return getCampaign(id, db)!;
+}
+
+/**
+ * Send the rest, or with `pauseAfter` only that many more, then pause again.
+ * Opt-outs and suppressions are checked again before each batch, so a resume
+ * after a long pause sends nothing to someone who left meanwhile.
+ */
+export function resumeCampaign(id: string, pauseAfter: unknown = null, db: Db = getDb()): Campaign {
+  assertCanSend(db);
+  const row = requireRow(id, db);
+  if (row.status !== 'paused') throw new EmailError(`This campaign is ${row.status}, not paused.`, 409);
+  const counts = statusCounts(id, db);
+  const more = cleanPauseAfter(pauseAfter);
+  const done = counts.sent + counts.failed + counts.sending;
+  const pauseAt = more !== null && more < counts.queued ? done + more : null;
+  db.prepare(`UPDATE email_campaigns SET status = 'sending', pause_at = ?, updated_at = ? WHERE id = ?`).run(
+    pauseAt,
+    now(),
+    id,
+  );
+  wake();
+  return getCampaign(id, db)!;
+}
+
+export interface SendRow {
+  email: string;
+  name: string | null;
+  shopName: string | null;
+  status: SendStatus;
+  skipReason: string | null;
+  error: string | null;
+  sentAt: string | null;
+  resendId: string | null;
+}
+
+/** The recipients of a campaign by status, for the paused screen: who got it already. */
+export function listSends(
+  id: string,
+  options: { status?: SendStatus; limit?: number; offset?: number } = {},
+  db: Db = getDb(),
+): { total: number; rows: SendRow[] } {
+  requireRow(id, db);
+  const status = options.status ?? 'sent';
+  const limit = Math.min(Math.max(Math.trunc(options.limit ?? 50), 1), 200);
+  const offset = Math.max(0, Math.trunc(options.offset ?? 0));
+  const total = (
+    db.prepare('SELECT COUNT(*) AS n FROM email_sends WHERE campaign_id = ? AND status = ?').get(id, status) as { n: number }
+  ).n;
+  const rows = db
+    .prepare(
+      `SELECT email, merge, status, skip_reason, error, sent_at, resend_id FROM email_sends
+        WHERE campaign_id = ? AND status = ? ORDER BY sent_at, email LIMIT ? OFFSET ?`,
+    )
+    .all(id, status, limit, offset) as Array<{
+    email: string;
+    merge: string;
+    status: SendStatus;
+    skip_reason: string | null;
+    error: string | null;
+    sent_at: string | null;
+    resend_id: string | null;
+  }>;
+  return {
+    total,
+    rows: rows.map((entry) => {
+      const merge = JSON.parse(entry.merge) as MergeValues;
+      const name = [merge.fields.first_name, merge.fields.last_name].filter((part) => part && part.trim()).join(' ');
+      return {
+        email: entry.email,
+        name: name || null,
+        shopName: merge.fields.shop_name ?? null,
+        status: entry.status,
+        skipReason: entry.skip_reason,
+        error: entry.error,
+        sentAt: entry.sent_at,
+        resendId: entry.resend_id,
+      };
+    }),
+  };
 }
 
 /** Recount the four counters from email_sends, the one source of truth. */
@@ -796,7 +918,7 @@ export function refreshCounters(id: string, db: Db = getDb()): Record<SendStatus
 
 export function cancelCampaign(id: string, db: Db = getDb()): Campaign {
   const row = requireRow(id, db);
-  if (row.status !== 'sending' && row.status !== 'ready') {
+  if (row.status !== 'sending' && row.status !== 'ready' && row.status !== 'paused') {
     throw new EmailError(`This campaign is ${row.status} and cannot be cancelled.`, 409);
   }
   const at = now();
@@ -804,7 +926,7 @@ export function cancelCampaign(id: string, db: Db = getDb()): Campaign {
     db.prepare(
       `UPDATE email_sends SET status = 'skipped', skip_reason = 'cancelled' WHERE campaign_id = ? AND status = 'queued'`,
     ).run(id);
-    db.prepare(`UPDATE email_campaigns SET status = 'cancelled', finished_at = ?, updated_at = ? WHERE id = ?`).run(
+    db.prepare(`UPDATE email_campaigns SET status = 'cancelled', pause_at = NULL, finished_at = ?, updated_at = ? WHERE id = ?`).run(
       at,
       at,
       id,

@@ -7,9 +7,12 @@ import {
   deleteCampaign,
   getCampaign,
   listCampaigns,
+  listSends,
+  pauseCampaign,
   prepareCampaign,
   previewRecipients,
   renderPreview,
+  resumeCampaign,
   sendTest,
   startSend,
   updateCampaign,
@@ -175,7 +178,37 @@ export function emailRouter(): express.Router {
   router.post(
     '/campaigns/:id/send',
     handle((request, response) => {
-      response.json(startSend(request.params.id!, bodyOf(request).confirmCount));
+      const body = bodyOf(request);
+      response.json(startSend(request.params.id!, body.confirmCount, undefined, undefined, body.pauseAfter));
+    }),
+  );
+
+  router.post(
+    '/campaigns/:id/pause',
+    handle((request, response) => {
+      response.json(pauseCampaign(request.params.id!));
+    }),
+  );
+
+  router.post(
+    '/campaigns/:id/resume',
+    handle((request, response) => {
+      response.json(resumeCampaign(request.params.id!, bodyOf(request).pauseAfter));
+    }),
+  );
+
+  // Who got the email already (or who failed, or was skipped): the paused screen's list.
+  router.get(
+    '/campaigns/:id/sends',
+    handle((request, response) => {
+      const status = request.query.status;
+      response.json(
+        listSends(request.params.id!, {
+          status: status === 'failed' || status === 'skipped' || status === 'queued' ? status : 'sent',
+          limit: Number(request.query.limit ?? 50) || 50,
+          offset: Number(request.query.offset ?? 0) || 0,
+        }),
+      );
     }),
   );
 

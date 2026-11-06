@@ -133,6 +133,18 @@ describe('migration runner', () => {
     db.close();
   });
 
+  it('migrations are 1..8 in order and 8 adds email_campaigns.pause_at', () => {
+    assert.equal(MIGRATIONS[7]!.version, 8);
+    const db = freshDb();
+    migrate(db);
+    const names = (db.prepare('PRAGMA table_info(email_campaigns)').all() as Array<{ name: string }>).map((c) => c.name);
+    assert.ok(names.includes('pause_at'));
+    // Idempotent: a database at 7 that already has the column replays 8 safely.
+    db.pragma('user_version = 7');
+    assert.doesNotThrow(() => migrate(db));
+    db.close();
+  });
+
   it('starts a new database at 0 and leaves it at the highest version', () => {
     const db = freshDb();
     assert.equal(readUserVersion(db), 0);

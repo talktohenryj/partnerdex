@@ -1,5 +1,5 @@
 import { getDb, type Db } from '../db/index.js';
-import { onSendStarted, refreshCounters, senderOf, type CampaignStatus } from './campaigns.js';
+import { onSendStarted, refreshCounters, senderOf, type CampaignStatus, type SendStatus } from './campaigns.js';
 import { configBlockedReason } from './guard.js';
 import { preferenceUrls } from './links.js';
 import { isSubscribed } from './preferences.js';
@@ -53,16 +53,18 @@ interface ActiveCampaign {
   button_color: string | null;
   batch_seq: number;
   batch_started_at: string | null;
+  /** Pause once sent + failed reaches this; null = no planned pause. */
+  pause_at: number | null;
 }
 
-/** The oldest campaign with work: sending, or cancelled with a batch still in flight. */
+/** The oldest campaign with work: sending, or cancelled or paused with a batch still in flight. */
 function nextCampaign(db: Db): ActiveCampaign | null {
   return (
     (db
       .prepare(
         `SELECT c.* FROM email_campaigns c
           WHERE c.status = 'sending'
-             OR (c.status = 'cancelled'
+             OR (c.status IN ('cancelled', 'paused')
                  AND EXISTS (SELECT 1 FROM email_sends s WHERE s.campaign_id = c.id AND s.status = 'sending'))
           ORDER BY c.started_at, c.id
           LIMIT 1`,
@@ -103,8 +105,22 @@ function outgoing(campaign: ActiveCampaign, row: SendRow, db: Db): OutgoingEmail
   };
 }
 
-/** Claim the next batch: re-check opt-outs, then mark up to 100 rows sending under one key. */
-function claimBatch(campaign: ActiveCampaign, db: Db, clock: () => number): { key: string; rows: SendRow[]; skipped: number } | null {
+/** How many more emails go out before a planned pause: at most one batch. */
+function roomBeforePause(campaign: ActiveCampaign, db: Db): number {
+  if (campaign.pause_at === null) return MAX_BATCH;
+  const done = db
+    .prepare(`SELECT COUNT(*) AS n FROM email_sends WHERE campaign_id = ? AND status IN ('sent', 'failed')`)
+    .get(campaign.id) as { n: number };
+  return Math.max(0, Math.min(MAX_BATCH, campaign.pause_at - done.n));
+}
+
+/** Claim the next batch: re-check opt-outs, then mark up to `room` rows sending under one key. */
+function claimBatch(
+  campaign: ActiveCampaign,
+  db: Db,
+  clock: () => number,
+  room: number,
+): { key: string; rows: SendRow[]; skipped: number } | null {
   return db.transaction(() => {
     const candidates = db
       .prepare(
@@ -120,7 +136,7 @@ function claimBatch(campaign: ActiveCampaign, db: Db, clock: () => number): { ke
     const rows: SendRow[] = [];
     let skipped = 0;
     for (const row of candidates) {
-      if (rows.length === MAX_BATCH) break;
+      if (rows.length === room) break;
       if (suppressed(row.email, db)) {
         skip.run('suppressed', campaign.id, row.email);
         skipped += 1;
@@ -148,21 +164,48 @@ function claimBatch(campaign: ActiveCampaign, db: Db, clock: () => number): { ke
   })();
 }
 
+function finishCampaign(id: string, counts: Record<SendStatus, number>, db: Db, clock: () => number): CampaignStatus {
+  const at = new Date(clock()).toISOString();
+  const status: CampaignStatus = counts.sent === 0 && counts.failed > 0 ? 'failed' : 'sent';
+  db.prepare(
+    `UPDATE email_campaigns SET status = ?, pause_at = NULL, finished_at = ?, updated_at = ? WHERE id = ?`,
+  ).run(status, at, at, id);
+  return status;
+}
+
 function finishIfDone(campaign: ActiveCampaign, db: Db, clock: () => number): TickOutcome | null {
   const counts = refreshCounters(campaign.id, db);
   if (counts.queued > 0 || counts.sending > 0) return null;
-  const at = new Date(clock()).toISOString();
   if (campaign.status === 'cancelled') {
     return { kind: 'finished', campaignId: campaign.id, status: 'cancelled' };
   }
-  const status: CampaignStatus = counts.sent === 0 && counts.failed > 0 ? 'failed' : 'sent';
-  db.prepare(`UPDATE email_campaigns SET status = ?, finished_at = ?, updated_at = ? WHERE id = ?`).run(
-    status,
-    at,
-    at,
-    campaign.id,
-  );
-  return { kind: 'finished', campaignId: campaign.id, status };
+  return { kind: 'finished', campaignId: campaign.id, status: finishCampaign(campaign.id, counts, db, clock) };
+}
+
+/**
+ * After every batch: recount, then pause a send that reached its planned
+ * pause, or close a paused one that has nothing left (a pause asked for while
+ * the last batch was in flight).
+ */
+function settle(id: string, db: Db, clock: () => number): void {
+  const counts = refreshCounters(id, db);
+  const row = db.prepare('SELECT status, pause_at FROM email_campaigns WHERE id = ?').get(id) as
+    | { status: CampaignStatus; pause_at: number | null }
+    | undefined;
+  if (!row || counts.sending > 0) return;
+  if (row.status === 'sending' && row.pause_at !== null && counts.sent + counts.failed >= row.pause_at) {
+    if (counts.queued === 0) {
+      finishCampaign(id, counts, db, clock);
+      return;
+    }
+    db.prepare(`UPDATE email_campaigns SET status = 'paused', pause_at = NULL, updated_at = ? WHERE id = ?`).run(
+      new Date(clock()).toISOString(),
+      id,
+    );
+    console.log(`[partnerdex] email campaign ${id} paused after ${counts.sent + counts.failed} emails, as planned`);
+  } else if (row.status === 'paused' && counts.queued === 0) {
+    finishCampaign(id, counts, db, clock);
+  }
 }
 
 /**
@@ -192,16 +235,24 @@ export async function runEmailTick(db: Db = getDb(), clock: () => number = Date.
       db.prepare(
         `UPDATE email_sends SET status = 'failed', error = ? WHERE campaign_id = ? AND batch_key = ? AND status = 'sending'`,
       ).run('idempotency window passed — check Resend before resending', campaign.id, key);
-      refreshCounters(campaign.id, db);
+      settle(campaign.id, db, clock);
       return { kind: 'batch', campaignId: campaign.id, batchKey: key, sent: 0, failed: rows.length, skipped: 0 };
     }
   } else {
-    if (campaign.status !== 'sending') return finishIfDone(campaign, db, clock) ?? { kind: 'idle' };
-    const claimed = claimBatch(campaign, db, clock);
+    if (campaign.status !== 'sending') {
+      settle(campaign.id, db, clock);
+      return campaign.status === 'cancelled' ? (finishIfDone(campaign, db, clock) ?? { kind: 'idle' }) : { kind: 'idle' };
+    }
+    const room = roomBeforePause(campaign, db);
+    if (room === 0) {
+      settle(campaign.id, db, clock);
+      return { kind: 'idle' };
+    }
+    const claimed = claimBatch(campaign, db, clock, room);
     if (!claimed) return finishIfDone(campaign, db, clock) ?? { kind: 'idle' };
     skipped = claimed.skipped;
     if (claimed.rows.length === 0) {
-      refreshCounters(campaign.id, db);
+      settle(campaign.id, db, clock);
       return { kind: 'batch', campaignId: campaign.id, batchKey: '', sent: 0, failed: 0, skipped };
     }
     key = claimed.key;
@@ -222,7 +273,7 @@ export async function runEmailTick(db: Db = getDb(), clock: () => number = Date.
       db.prepare(
         `UPDATE email_sends SET status = 'failed', error = ? WHERE campaign_id = ? AND batch_key = ? AND status = 'sending'`,
       ).run(message.slice(0, 500), campaign.id, key);
-      refreshCounters(campaign.id, db);
+      settle(campaign.id, db, clock);
       console.log(`[partnerdex] email campaign ${campaign.id} batch ${key}: 0 sent, ${rows.length} failed`);
       return { kind: 'batch', campaignId: campaign.id, batchKey: key, sent: 0, failed: rows.length, skipped };
     }
@@ -237,7 +288,7 @@ export async function runEmailTick(db: Db = getDb(), clock: () => number = Date.
     );
     rows.forEach((row, index) => done.run(ids[index] ?? null, at, campaign.id, row.email));
   })();
-  refreshCounters(campaign.id, db);
+  settle(campaign.id, db, clock);
   console.log(`[partnerdex] email campaign ${campaign.id} batch ${key}: ${rows.length} sent, 0 failed`);
   return { kind: 'batch', campaignId: campaign.id, batchKey: key, sent: rows.length, failed: 0, skipped };
 }

@@ -429,6 +429,22 @@ export const MIGRATIONS: Migration[] = [
       db.exec(EMAIL_SEND_SCHEMA_SQL);
     },
   },
+
+  /*
+   * A send can stop by itself after its first few emails, so a person can
+   * check them before the rest go out. pause_at is the sent + failed count at
+   * which the send loop sets the campaign to paused; NULL means no planned
+   * pause. A column, not a status alone, so the plan survives a restart.
+   */
+  {
+    version: 8,
+    up: (db) => {
+      const campaigns = columns(db, 'email_campaigns');
+      if (campaigns.size > 0 && !campaigns.has('pause_at')) {
+        db.exec('ALTER TABLE email_campaigns ADD COLUMN pause_at INTEGER');
+      }
+    },
+  },
 ];
 
 export function readUserVersion(db: Db): number {

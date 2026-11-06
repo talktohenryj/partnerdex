@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  cancelCampaign,
   createCampaign,
   deleteCampaign,
   fetchAudiences,
@@ -18,9 +17,9 @@ import {
   type RenderedPreview,
   type SavedAudienceSummary,
 } from '../api';
-import { formatDateTime } from '../format';
 import { BlockedBanner, CampaignStatusPill } from './EmailCampaigns';
 import { EmailPreview } from './EmailPreview';
+import { EmailProgress, PAUSE_CHOICES } from './EmailProgress';
 
 const INSERTS: Array<{ label: string; text: string }> = [
   { label: 'first_name', text: '{{first_name|there}}' },
@@ -71,6 +70,10 @@ function ConfirmSend({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [typed, setTyped] = useState('');
+  // Send the first few, then pause: the safe default when there are more than that.
+  const canStage = result.count > PAUSE_CHOICES[0];
+  const [mode, setMode] = useState<'stage' | 'all'>(canStage ? 'stage' : 'all');
+  const [first, setFirst] = useState<number>(PAUSE_CHOICES.find((n) => n === 10 && n < result.count) ?? PAUSE_CHOICES[0]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,7 +86,7 @@ function ConfirmSend({
     setBusy(true);
     setError(null);
     try {
-      onSent(await sendCampaign(campaign.id, Number(typed)));
+      onSent(await sendCampaign(campaign.id, Number(typed), mode === 'stage' ? first : null));
     } catch (cause) {
       setError((cause as Error).message);
       setBusy(false);
@@ -134,6 +137,42 @@ function ConfirmSend({
         </p>
       ) : null}
       <p className="email-sub">Sample: {result.sample.map((entry) => entry.email).join(' · ')}{result.count > result.sample.length ? ' · …' : ''}</p>
+      {canStage ? (
+        <fieldset className="email-stage">
+          <legend className="sr-only">How to send</legend>
+          <label className="email-stage-option">
+            <input type="radio" name="email-stage" checked={mode === 'stage'} onChange={() => setMode('stage')} />
+            <span>
+              <span className="email-stage-line">
+                Send the first
+                <select
+                  aria-label="How many to send first"
+                  value={first}
+                  onChange={(event) => {
+                    setFirst(Number(event.target.value));
+                    setMode('stage');
+                  }}
+                >
+                  {PAUSE_CHOICES.filter((n) => n < result.count).map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+                and pause
+              </span>
+              <small>Check them, then send the rest from the campaign page.</small>
+            </span>
+          </label>
+          <label className="email-stage-option">
+            <input type="radio" name="email-stage" checked={mode === 'all'} onChange={() => setMode('all')} />
+            <span>
+              Send all {count} now
+              <small>You can still pause while it sends, but a small list goes out in seconds.</small>
+            </span>
+          </label>
+        </fieldset>
+      ) : null}
       <div className="control">
         <label htmlFor="email-confirm-count">Type {result.count} to send</label>
         <input
@@ -150,68 +189,10 @@ function ConfirmSend({
           Cancel
         </button>
         <button type="button" className="primary" disabled={busy || typed !== String(result.count)} onClick={send}>
-          {busy ? 'Starting…' : `Send ${count} emails`}
+          {busy ? 'Starting…' : mode === 'stage' ? `Send ${first}, then pause` : `Send ${count} emails`}
         </button>
       </div>
     </dialog>
-  );
-}
-
-function Progress({ campaign, onChange }: { campaign: EmailCampaign; onChange: (campaign: EmailCampaign) => void }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const total = campaign.recipientCount || 1;
-  const done = campaign.counts.sent + campaign.counts.failed;
-  const skippedLate = campaign.counts.skipped;
-
-  const cancel = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      onChange(await cancelCampaign(campaign.id));
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <section className="card full email-card">
-      <div className="card-head">
-        <div>
-          <h2 className="card-label">
-            {campaign.name} <CampaignStatusPill status={campaign.status} />
-          </h2>
-          <p className="email-sub">
-            Subject: {campaign.subject}
-            {campaign.startedAt ? ` · started ${formatDateTime(campaign.startedAt)}` : ''}
-            {campaign.finishedAt ? ` · finished ${formatDateTime(campaign.finishedAt)}` : ''}
-          </p>
-        </div>
-        {campaign.status === 'sending' ? (
-          <button type="button" onClick={cancel} disabled={busy}>
-            {busy ? 'Cancelling…' : 'Cancel'}
-          </button>
-        ) : null}
-      </div>
-      <div
-        className="email-progress"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={campaign.recipientCount}
-        aria-valuenow={campaign.counts.sent}
-        aria-label="Sent"
-      >
-        <span style={{ width: `${Math.min(100, (done / total) * 100)}%` }} />
-      </div>
-      <p>
-        <b>{campaign.counts.sent.toLocaleString()}</b> of {campaign.recipientCount.toLocaleString()} sent ·{' '}
-        {campaign.counts.failed.toLocaleString()} failed · {skippedLate.toLocaleString()} skipped
-      </p>
-      {campaign.status === 'sending' ? <p className="email-sub">This page updates every 3 seconds. You can leave it; sending goes on.</p> : null}
-      {error ? <p className="channel-status bad">{error}</p> : null}
-    </section>
   );
 }
 
@@ -382,7 +363,7 @@ export function EmailCompose({ campaignId }: { campaignId: string | null }) {
         <a className="back-link" href="#/email">
           ← Campaigns
         </a>
-        <Progress campaign={campaign} onChange={setCampaign} />
+        <EmailProgress campaign={campaign} onChange={setCampaign} />
       </>
     );
   }

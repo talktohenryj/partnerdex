@@ -6,6 +6,7 @@ const STATUS_LABEL: Record<EmailCampaign['status'], string> = {
   draft: 'Draft',
   ready: 'Ready',
   sending: 'Sending',
+  paused: 'Paused',
   sent: 'Sent',
   cancelled: 'Cancelled',
   failed: 'Failed',

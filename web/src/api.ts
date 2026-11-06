@@ -930,7 +930,7 @@ export interface AppLinks {
   updatedAt: string | null;
 }
 
-export type CampaignStatus = 'draft' | 'ready' | 'sending' | 'sent' | 'cancelled' | 'failed';
+export type CampaignStatus = 'draft' | 'ready' | 'sending' | 'paused' | 'sent' | 'cancelled' | 'failed';
 
 export interface EmailCampaign {
   id: string;
@@ -949,6 +949,8 @@ export interface EmailCampaign {
   failedCount: number;
   skippedCount: number;
   counts: Record<'queued' | 'sending' | 'sent' | 'failed' | 'skipped', number>;
+  /** The send pauses by itself when sent + failed reaches this. */
+  pauseAt: number | null;
   createdAt: string;
   updatedAt: string;
   preparedAt: string | null;
@@ -1075,8 +1077,38 @@ export const sendTestEmail = (
 export const prepareCampaign = (id: string): Promise<PrepareResult> =>
   sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/prepare`);
 
-export const sendCampaign = (id: string, confirmCount: number): Promise<EmailCampaign> =>
-  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/send`, { confirmCount });
+/** `pauseAfter`: send that many, then pause; null sends everything. */
+export const sendCampaign = (id: string, confirmCount: number, pauseAfter: number | null = null): Promise<EmailCampaign> =>
+  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/send`, { confirmCount, pauseAfter });
+
+export const pauseCampaign = (id: string): Promise<EmailCampaign> =>
+  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/pause`);
+
+/** `pauseAfter`: send that many more, then pause again; null sends the rest. */
+export const resumeCampaign = (id: string, pauseAfter: number | null = null): Promise<EmailCampaign> =>
+  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/resume`, { pauseAfter });
+
+export interface SentEmailRow {
+  email: string;
+  name: string | null;
+  shopName: string | null;
+  status: 'queued' | 'sending' | 'sent' | 'failed' | 'skipped';
+  skipReason: string | null;
+  error: string | null;
+  sentAt: string | null;
+  resendId: string | null;
+}
+
+export const fetchSends = (
+  id: string,
+  options: { status?: SentEmailRow['status']; limit?: number; offset?: number } = {},
+): Promise<{ total: number; rows: SentEmailRow[] }> => {
+  const params = new URLSearchParams();
+  if (options.status) params.set('status', options.status);
+  if (options.limit) params.set('limit', String(options.limit));
+  if (options.offset) params.set('offset', String(options.offset));
+  return getJson(`/api/email/campaigns/${encodeURIComponent(id)}/sends?${params.toString()}`);
+};
 
 export const cancelCampaign = (id: string): Promise<EmailCampaign> =>
   sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/cancel`);
