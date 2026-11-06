@@ -932,6 +932,18 @@ export interface AppLinks {
 
 export type CampaignStatus = 'draft' | 'ready' | 'sending' | 'paused' | 'sent' | 'cancelled' | 'failed';
 
+export interface CampaignStats {
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  complained: number;
+  unsubscribed: number;
+  failed: number;
+  skipped: number;
+}
+
 export interface EmailCampaign {
   id: string;
   name: string;
@@ -951,6 +963,11 @@ export interface EmailCampaign {
   counts: Record<'queued' | 'sending' | 'sent' | 'failed' | 'skipped', number>;
   /** The send pauses by itself when sent + failed reaches this. */
   pauseAt: number | null;
+  stats: CampaignStats;
+  /** Open, click and unsubscribe over delivered; bounce over sent. Null when the base is 0. */
+  rates: { open: number | null; click: number | null; unsubscribe: number | null; bounce: number | null };
+  /** Set while sending waits for the daily limit or a Resend quota. */
+  waiting: { reason: 'daily_limit' | 'daily_quota' | 'monthly_quota'; until: string } | null;
   createdAt: string;
   updatedAt: string;
   preparedAt: string | null;
@@ -1097,14 +1114,31 @@ export interface SentEmailRow {
   error: string | null;
   sentAt: string | null;
   resendId: string | null;
+  deliveredAt: string | null;
+  openedAt: string | null;
+  clickedAt: string | null;
+  bouncedAt: string | null;
+  complainedAt: string | null;
+  unsubscribedAt: string | null;
 }
+
+export type SendFilter =
+  | 'all'
+  | SentEmailRow['status']
+  | 'delivered'
+  | 'opened'
+  | 'clicked'
+  | 'bounced'
+  | 'complained'
+  | 'unsubscribed';
 
 export const fetchSends = (
   id: string,
-  options: { status?: SentEmailRow['status']; limit?: number; offset?: number } = {},
+  options: { status?: SendFilter; q?: string; limit?: number; offset?: number } = {},
 ): Promise<{ total: number; rows: SentEmailRow[] }> => {
   const params = new URLSearchParams();
   if (options.status) params.set('status', options.status);
+  if (options.q) params.set('q', options.q);
   if (options.limit) params.set('limit', String(options.limit));
   if (options.offset) params.set('offset', String(options.offset));
   return getJson(`/api/email/campaigns/${encodeURIComponent(id)}/sends?${params.toString()}`);
@@ -1112,3 +1146,38 @@ export const fetchSends = (
 
 export const cancelCampaign = (id: string): Promise<EmailCampaign> =>
   sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/cancel`);
+
+export interface FailureGroup {
+  error: string;
+  count: number;
+  /** Resend may have sent these. */
+  uncertain: boolean;
+  /** Resend refused the request; the same email would fail again. */
+  rejected: boolean;
+}
+
+export const fetchFailureGroups = (id: string): Promise<{ groups: FailureGroup[] }> =>
+  getJson(`/api/email/campaigns/${encodeURIComponent(id)}/failures`);
+
+export const retryFailed = (id: string, errors: string[], count: number): Promise<EmailCampaign> =>
+  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/retry-failed`, { errors, count });
+
+export interface EmailHistoryEntry {
+  campaignId: string;
+  name: string;
+  subject: string;
+  sentAt: string | null;
+  status: SentEmailRow['status'];
+  deliveredAt: string | null;
+  openedAt: string | null;
+  clickedAt: string | null;
+  bouncedAt: string | null;
+  complainedAt: string | null;
+  unsubscribedAt: string | null;
+}
+
+export const fetchEmailHistory = (email: string): Promise<{ history: EmailHistoryEntry[] }> =>
+  getJson(`/api/email/contacts/${encodeURIComponent(email)}/history`);
+
+export const fetchLastEmails = (emails: string[]): Promise<{ last: Record<string, EmailHistoryEntry> }> =>
+  getJson(`/api/email/contacts/last?emails=${encodeURIComponent(emails.join(','))}`);

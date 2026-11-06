@@ -25,6 +25,7 @@ import {
 import { fromDomain, getSettings } from './settings.js';
 import { getTransport, type EmailTransport } from './transport.js';
 import { getEmailType, listEmailTypes } from './types.js';
+import { sendWait, type SendWait } from './wait.js';
 
 /**
  * Campaigns: one email to one audience, from draft to sent.
@@ -58,11 +59,29 @@ export interface Campaign {
   counts: Record<SendStatus, number>;
   /** The send pauses by itself when sent + failed reaches this. */
   pauseAt: number | null;
+  /** Delivery events from the Resend webhook (or the one-time backfill). */
+  stats: CampaignStats;
+  /** Open, click and unsubscribe over delivered; bounce over sent. Null when the base is 0. */
+  rates: { open: number | null; click: number | null; unsubscribe: number | null; bounce: number | null };
+  /** Set while the campaign is sending but the loop waits for a daily limit or a Resend quota. */
+  waiting: SendWait | null;
   createdAt: string;
   updatedAt: string;
   preparedAt: string | null;
   startedAt: string | null;
   finishedAt: string | null;
+}
+
+export interface CampaignStats {
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  complained: number;
+  unsubscribed: number;
+  failed: number;
+  skipped: number;
 }
 
 interface CampaignRow {
@@ -135,7 +154,24 @@ function statusCounts(id: string, db: Db): Record<SendStatus, number> {
   return counts;
 }
 
+function campaignStats(id: string, counts: Record<SendStatus, number>, db: Db): CampaignStats {
+  const events = db
+    .prepare(
+      `SELECT COUNT(delivered_at) AS delivered, COUNT(opened_at) AS opened, COUNT(clicked_at) AS clicked,
+              COUNT(bounced_at) AS bounced, COUNT(complained_at) AS complained, COUNT(unsubscribed_at) AS unsubscribed
+         FROM email_sends WHERE campaign_id = ?`,
+    )
+    .get(id) as Omit<CampaignStats, 'sent' | 'failed' | 'skipped'>;
+  return { sent: counts.sent, ...events, failed: counts.failed, skipped: counts.skipped };
+}
+
+function ratio(part: number, whole: number): number | null {
+  return whole > 0 ? part / whole : null;
+}
+
 function toCampaign(row: CampaignRow, db: Db): Campaign {
+  const counts = statusCounts(row.id, db);
+  const stats = campaignStats(row.id, counts, db);
   const audienceName = row.audience_id ? (getAudience(row.audience_id, db)?.name ?? null) : null;
   return {
     id: row.id,
@@ -153,8 +189,16 @@ function toCampaign(row: CampaignRow, db: Db): Campaign {
     sentCount: row.sent_count,
     failedCount: row.failed_count,
     skippedCount: row.skipped_count,
-    counts: statusCounts(row.id, db),
+    counts,
     pauseAt: row.pause_at ?? null,
+    stats,
+    rates: {
+      open: ratio(stats.opened, stats.delivered),
+      click: ratio(stats.clicked, stats.delivered),
+      unsubscribe: ratio(stats.unsubscribed, stats.delivered),
+      bounce: ratio(stats.bounced, stats.sent),
+    },
+    waiting: row.status === 'sending' ? sendWait() : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     preparedAt: row.prepared_at,
@@ -859,27 +903,64 @@ export interface SendRow {
   error: string | null;
   sentAt: string | null;
   resendId: string | null;
+  deliveredAt: string | null;
+  openedAt: string | null;
+  clickedAt: string | null;
+  bouncedAt: string | null;
+  complainedAt: string | null;
+  unsubscribedAt: string | null;
 }
 
-/** The recipients of a campaign by status, for the paused screen: who got it already. */
+/** A recipients filter: a send status, or "has this delivery event", or everyone. */
+export type SendFilter = 'all' | SendStatus | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'complained' | 'unsubscribed';
+
+const EVENT_FILTERS: Partial<Record<SendFilter, string>> = {
+  delivered: 'delivered_at',
+  opened: 'opened_at',
+  clicked: 'clicked_at',
+  bounced: 'bounced_at',
+  complained: 'complained_at',
+  unsubscribed: 'unsubscribed_at',
+};
+
+export function asSendFilter(value: unknown): SendFilter | null {
+  const filters: SendFilter[] = [
+    'all', 'queued', 'sending', 'sent', 'failed', 'skipped',
+    'delivered', 'opened', 'clicked', 'bounced', 'complained', 'unsubscribed',
+  ];
+  return typeof value === 'string' && (filters as string[]).includes(value) ? (value as SendFilter) : null;
+}
+
+/**
+ * The recipients of a campaign: by status (the paused screen's "who got it
+ * already"), or by delivery event (the report), searchable by address.
+ */
 export function listSends(
   id: string,
-  options: { status?: SendStatus; limit?: number; offset?: number } = {},
+  options: { status?: SendFilter; q?: string; limit?: number; offset?: number } = {},
   db: Db = getDb(),
 ): { total: number; rows: SendRow[] } {
   requireRow(id, db);
-  const status = options.status ?? 'sent';
+  const filter = options.status ?? 'sent';
   const limit = Math.min(Math.max(Math.trunc(options.limit ?? 50), 1), 200);
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
-  const total = (
-    db.prepare('SELECT COUNT(*) AS n FROM email_sends WHERE campaign_id = ? AND status = ?').get(id, status) as { n: number }
-  ).n;
+  const where = ['campaign_id = @id'];
+  const event = EVENT_FILTERS[filter];
+  if (event) where.push(`${event} IS NOT NULL`);
+  else if (filter !== 'all') where.push('status = @status');
+  const q = (options.q ?? '').trim().toLowerCase();
+  if (q) where.push(`(email LIKE @q ESCAPE '\\' OR LOWER(merge) LIKE @q ESCAPE '\\')`);
+  const params = { id, status: filter, q: `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`, limit, offset };
+  const clause = where.join(' AND ');
+  const total = (db.prepare(`SELECT COUNT(*) AS n FROM email_sends WHERE ${clause}`).get(params) as { n: number }).n;
   const rows = db
     .prepare(
-      `SELECT email, merge, status, skip_reason, error, sent_at, resend_id FROM email_sends
-        WHERE campaign_id = ? AND status = ? ORDER BY sent_at, email LIMIT ? OFFSET ?`,
+      `SELECT email, merge, status, skip_reason, error, sent_at, resend_id, delivered_at, opened_at, clicked_at,
+              bounced_at, complained_at, unsubscribed_at
+         FROM email_sends WHERE ${clause}
+        ORDER BY ${event ? `${event} DESC,` : ''} sent_at IS NULL, sent_at, email LIMIT @limit OFFSET @offset`,
     )
-    .all(id, status, limit, offset) as Array<{
+    .all(params) as Array<{
     email: string;
     merge: string;
     status: SendStatus;
@@ -887,6 +968,12 @@ export function listSends(
     error: string | null;
     sent_at: string | null;
     resend_id: string | null;
+    delivered_at: string | null;
+    opened_at: string | null;
+    clicked_at: string | null;
+    bounced_at: string | null;
+    complained_at: string | null;
+    unsubscribed_at: string | null;
   }>;
   return {
     total,
@@ -902,6 +989,12 @@ export function listSends(
         error: entry.error,
         sentAt: entry.sent_at,
         resendId: entry.resend_id,
+        deliveredAt: entry.delivered_at,
+        openedAt: entry.opened_at,
+        clickedAt: entry.clicked_at,
+        bouncedAt: entry.bounced_at,
+        complainedAt: entry.complained_at,
+        unsubscribedAt: entry.unsubscribed_at,
       };
     }),
   };
@@ -914,6 +1007,73 @@ export function refreshCounters(id: string, db: Db = getDb()): Record<SendStatus
     `UPDATE email_campaigns SET sent_count = ?, failed_count = ?, skipped_count = ?, updated_at = ? WHERE id = ?`,
   ).run(counts.sent, counts.failed, counts.skipped, now(), id);
   return counts;
+}
+
+// ---------------------------------------------------------------------------
+// Retry failed
+
+/** The error S3 writes when a batch outlives Resend's idempotency key. */
+export const IDEMPOTENCY_WINDOW_ERROR = 'idempotency window passed — check Resend before resending';
+
+export interface FailureGroup {
+  error: string;
+  count: number;
+  /** Resend may have sent these: the outcome of the request is unknown. */
+  uncertain: boolean;
+  /** Resend refused the request (a 4xx other than 429): the same email would fail again. */
+  rejected: boolean;
+}
+
+/** Failed rows that Resend never accepted, grouped by error text, largest first. */
+export function failureGroups(id: string, db: Db = getDb()): FailureGroup[] {
+  requireRow(id, db);
+  const rows = db
+    .prepare(
+      `SELECT COALESCE(error, '') AS error, COUNT(*) AS n FROM email_sends
+        WHERE campaign_id = ? AND status = 'failed' AND resend_id IS NULL
+        GROUP BY COALESCE(error, '') ORDER BY n DESC, error`,
+    )
+    .all(id) as Array<{ error: string; n: number }>;
+  return rows.map((row) => ({
+    error: row.error,
+    count: row.n,
+    uncertain: row.error === IDEMPOTENCY_WINDOW_ERROR,
+    rejected: /invalid|not verified|validation|not allowed/i.test(row.error),
+  }));
+}
+
+/**
+ * Put the failed rows with the chosen errors back in the queue and send the
+ * campaign again. A row with a resend_id never moves: Resend accepted it.
+ * `confirmCount` must be the number of rows that will move.
+ */
+export function retryFailed(id: string, errors: unknown, confirmCount: unknown, db: Db = getDb()): Campaign {
+  assertCanSend(db);
+  const row = requireRow(id, db);
+  if (row.status !== 'sent' && row.status !== 'failed') {
+    throw new EmailError(`This campaign is ${row.status}. Retry works only on a sent or failed campaign.`, 409);
+  }
+  if (!Array.isArray(errors) || errors.length === 0 || errors.some((error) => typeof error !== 'string')) {
+    throw new EmailError('Choose at least one group of failures to retry.', 422, 'errors');
+  }
+  const chosen = errors as string[];
+  const marks = chosen.map(() => '?').join(', ');
+  const match = `campaign_id = ? AND status = 'failed' AND resend_id IS NULL AND COALESCE(error, '') IN (${marks})`;
+  const count = (db.prepare(`SELECT COUNT(*) AS n FROM email_sends WHERE ${match}`).get(id, ...chosen) as { n: number }).n;
+  if (count === 0) throw new EmailError('No failed emails match those groups.', 409);
+  if (typeof confirmCount === 'boolean' || Number(confirmCount) !== count) {
+    throw new EmailError(`Type ${count} to confirm.`, 400);
+  }
+  const at = now();
+  db.transaction(() => {
+    db.prepare(`UPDATE email_sends SET status = 'queued', batch_key = NULL, error = NULL WHERE ${match}`).run(id, ...chosen);
+    db.prepare(
+      `UPDATE email_campaigns SET status = 'sending', pause_at = NULL, finished_at = NULL, updated_at = ? WHERE id = ?`,
+    ).run(at, id);
+    refreshCounters(id, db);
+  })();
+  wake();
+  return getCampaign(id, db)!;
 }
 
 export function cancelCampaign(id: string, db: Db = getDb()): Campaign {

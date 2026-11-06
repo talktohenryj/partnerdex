@@ -30,6 +30,7 @@ import { bigqueryRouter } from './bigquery.js';
 import { emailRouter } from './email.js';
 import { preferencesRouter } from './preferences.js';
 import { startEmailRunner } from '../email/runner.js';
+import { resendWebhookHandler } from '../email/webhook.js';
 import { listAppSources } from '../bigquery/connection.js';
 import { funnelReport } from '../metrics/reports/funnel.js';
 
@@ -96,6 +97,15 @@ export function createApp(): express.Express {
   // the 64kb parser below because a batch of 500 shops is larger than that;
   // the router reads its own body (1mb) after the token check.
   app.use('/api/identify', identifyRouter());
+
+  // Resend's delivery events. The signature covers the raw bytes, so this
+  // reads its own raw body ahead of the JSON parser, and it sits ahead of the
+  // dashboard gate because the signature is the credential.
+  app.post(
+    '/api/email/webhooks/resend',
+    express.raw({ type: () => true, limit: '256kb' }),
+    resendWebhookHandler,
+  );
 
   // Only the notification routes accept a body, and the largest of those is a
   // name and a URL. A small ceiling keeps a stray upload from becoming memory.

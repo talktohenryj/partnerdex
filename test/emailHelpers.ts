@@ -5,10 +5,12 @@ import {
   setTransportForTests,
   TransportError,
   type DomainStatus,
+  type EmailRecord,
   type EmailTransport,
   type OutgoingEmail,
 } from '../src/email/transport.js';
 import { resetTestLimits } from '../src/email/campaigns.js';
+import { setSendWait } from '../src/email/wait.js';
 import { APP_ID, resetEnvironment, seed } from './helpers.js';
 
 export const SECRET = 'test-secret-test-secret-test-secret-0123';
@@ -32,6 +34,9 @@ export class FakeTransport implements EmailTransport {
   domain: DomainStatus = 'verified';
   /** Errors to throw on the next batch calls, in order. */
   failures: Array<TransportError> = [];
+  /** What getEmail() answers, by Resend id. A TransportError value is thrown. */
+  records = new Map<string, EmailRecord | TransportError>();
+  getEmailCalls: string[] = [];
   private seq = 0;
 
   async sendBatch(emails: OutgoingEmail[], idempotencyKey: string) {
@@ -44,6 +49,16 @@ export class FakeTransport implements EmailTransport {
   async sendOne(email: OutgoingEmail) {
     this.calls.push({ kind: 'one', emails: [email] });
     return { id: `re_${++this.seq}` };
+  }
+
+  async getEmail(id: string): Promise<EmailRecord> {
+    this.getEmailCalls.push(id);
+    const record = this.records.get(id);
+    if (record instanceof TransportError) {
+      this.records.delete(id);
+      throw record;
+    }
+    return record ?? { lastEvent: 'sent', createdAt: null };
   }
 
   async domainStatus(): Promise<DomainStatus> {
@@ -59,6 +74,11 @@ export function retryable(): TransportError {
   return new TransportError('Resend: service unavailable', 503, true);
 }
 
+/** A Resend 429 with its error name, as resend.ts throws it. */
+export function quota(code: 'daily_quota_exceeded' | 'monthly_quota_exceeded' | 'rate_limit_exceeded'): TransportError {
+  return new TransportError(`Resend: ${code}`, 429, true, code);
+}
+
 export function rejected(): TransportError {
   return new TransportError('Resend: invalid from address', 422, false);
 }
@@ -67,6 +87,7 @@ export function rejected(): TransportError {
 export function sendingSetup(env: Record<string, string> = SENDING_ENV): FakeTransport {
   resetEnvironment({ PARTNER_APP_IDS: APP_ID, ...env });
   resetTestLimits();
+  setSendWait(null);
   const fake = new FakeTransport();
   setTransportForTests(fake);
   return fake;

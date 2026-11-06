@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { LastEmailCell, useLastEmails } from './EmailLast';
 import {
   audienceExportUrl,
   createAudience,
@@ -435,6 +436,7 @@ function ContactsTable({
 }) {
   const [resolving, setResolving] = useState<string | null>(null);
   const [busyEmail, setBusyEmail] = useState<string | null>(null);
+  const lastEmails = useLastEmails(rows.map((row) => row.email));
 
   const toggleSuppressed = (row: TableRow) => {
     setBusyEmail(row.email);
@@ -461,6 +463,7 @@ function ContactsTable({
               className="col-customer"
             />
             <th>Status</th>
+            <th>Last email</th>
             <th></th>
           </tr>
         </thead>
@@ -508,6 +511,7 @@ function ContactsTable({
                   <span className="muted">—</span>
                 )}
               </td>
+              <LastEmailCell email={row.email} entry={lastEmails[row.email.toLowerCase()]} />
               <td>
                 <button
                   type="button"

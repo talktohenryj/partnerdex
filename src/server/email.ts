@@ -2,7 +2,9 @@ import express from 'express';
 import { getAppLinks, saveAppLinks } from '../apps/links.js';
 import {
   asFilter,
+  asSendFilter,
   cancelCampaign,
+  failureGroups,
   createCampaign,
   deleteCampaign,
   getCampaign,
@@ -13,11 +15,13 @@ import {
   previewRecipients,
   renderPreview,
   resumeCampaign,
+  retryFailed,
   sendTest,
   startSend,
   updateCampaign,
 } from '../email/campaigns.js';
 import { EmailError } from '../email/errors.js';
+import { emailHistory, lastEmailFor } from '../email/history.js';
 import { sendingBlockedReason } from '../email/guard.js';
 import { MERGE_FIELDS } from '../email/render.js';
 import { fromDomain, getSettings, saveSettings } from '../email/settings.js';
@@ -197,18 +201,49 @@ export function emailRouter(): express.Router {
     }),
   );
 
-  // Who got the email already (or who failed, or was skipped): the paused screen's list.
+  // The recipients by status (the paused screen's list) or by delivery event (the report).
   router.get(
     '/campaigns/:id/sends',
     handle((request, response) => {
-      const status = request.query.status;
       response.json(
         listSends(request.params.id!, {
-          status: status === 'failed' || status === 'skipped' || status === 'queued' ? status : 'sent',
+          status: asSendFilter(request.query.status) ?? 'sent',
+          q: typeof request.query.q === 'string' ? request.query.q : undefined,
           limit: Number(request.query.limit ?? 50) || 50,
           offset: Number(request.query.offset ?? 0) || 0,
         }),
       );
+    }),
+  );
+
+  router.get(
+    '/campaigns/:id/failures',
+    handle((request, response) => {
+      response.json({ groups: failureGroups(request.params.id!) });
+    }),
+  );
+
+  router.post(
+    '/campaigns/:id/retry-failed',
+    handle((request, response) => {
+      const body = bodyOf(request);
+      response.json(retryFailed(request.params.id!, body.errors, body.count));
+    }),
+  );
+
+  // On the email router, not the contacts router, so the contacts code stays as it is upstream.
+  router.get(
+    '/contacts/last',
+    handle((request, response) => {
+      const raw = typeof request.query.emails === 'string' ? request.query.emails : '';
+      response.json({ last: lastEmailFor(raw.split(',')) });
+    }),
+  );
+
+  router.get(
+    '/contacts/:email/history',
+    handle((request, response) => {
+      response.json({ history: emailHistory(request.params.email!) });
     }),
   );
 

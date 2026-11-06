@@ -3634,19 +3634,22 @@ button.primary.danger {
 
 .cv-table {
   table-layout: fixed;
-  min-width: 860px;
+  min-width: 980px;
 }
 
-.cv-table tr > :nth-child(1) { width: 24%; }
-.cv-table tr > :nth-child(2) { width: 11%; }
-.cv-table tr > :nth-child(3) { width: 11%; }
-.cv-table tr > :nth-child(4) { width: 11%; }
-.cv-table tr > :nth-child(5) { width: 23%; }
-.cv-table tr > :nth-child(6) { width: 10%; }
-.cv-table tr > :nth-child(7) { width: 10%; }
+.cv-table tr > :nth-child(1) { width: 21%; }
+.cv-table tr > :nth-child(2) { width: 10%; }
+.cv-table tr > :nth-child(3) { width: 10%; }
+.cv-table tr > :nth-child(4) { width: 10%; }
+.cv-table tr > :nth-child(5) { width: 20%; }
+.cv-table tr > :nth-child(6) { width: 9%; }
+.cv-table tr > :nth-child(7) { width: 12%; }
+.cv-table tr > :nth-child(8) { width: 8%; }
 
 .cv-table th:nth-child(6),
-.cv-table td:nth-child(6) {
+.cv-table td:nth-child(6),
+.cv-table th:nth-child(7),
+.cv-table td:nth-child(7) {
   text-align: left;
 }
 
@@ -4360,4 +4363,81 @@ button.primary.danger {
 
 .email-sent-modal {
   width: min(760px, calc(100vw - 32px));
+}
+
+/* Email S4: the campaign report */
+.email-stats {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 14px 0 6px;
+}
+
+@media (max-width: 900px) {
+  .email-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.email-chip.on {
+  border-color: var(--brand);
+  background: var(--hover-wash);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.email-search {
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  min-width: 200px;
+  background: transparent;
+  color: inherit;
+}
+
+.email-retry-groups {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0;
+  display: grid;
+  gap: 8px;
+}
+
+.email-retry-groups .cell-note {
+  display: block;
+  margin-left: 22px;
+}
+
+.email-last {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.email-last + .email-outcome {
+  display: block;
+}
+
+.email-outcome {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.email-outcome-good {
+  color: var(--good);
+}
+
+.email-outcome-bad {
+  color: var(--critical);
+}
+
+.email-outcome-warn {
+  color: var(--series-4);
+}
+
+.email-outcome-muted {
+  color: var(--muted);
 }

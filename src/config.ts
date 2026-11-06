@@ -187,6 +187,25 @@ function emailLinkSecret(): string | null {
   return value;
 }
 
+function resendWebhookSecret(): string | null {
+  const value = process.env.RESEND_WEBHOOK_SECRET?.trim() ?? '';
+  if (!value) return null;
+  if (!/^whsec_[A-Za-z0-9+/=]+$/.test(value)) {
+    throw new ConfigError('RESEND_WEBHOOK_SECRET must be the whsec_… value Resend shows for the webhook.');
+  }
+  return value;
+}
+
+function emailDailyLimit(): number | null {
+  const value = process.env.EMAIL_DAILY_LIMIT?.trim() ?? '';
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new ConfigError(`EMAIL_DAILY_LIMIT must be a whole number above 0, got "${value}".`);
+  }
+  return parsed;
+}
+
 /** `:memory:` is passed through verbatim; anything else is a real file path. */
 function databasePath(): string {
   const raw = optional('DATABASE_PATH', './data/partnerdex.db');
@@ -298,6 +317,14 @@ export interface Config {
     resendApiKey: string | null;
     publicBaseUrl: string | null;
     linkSecret: string | null;
+    /** The whsec_… signing secret of the Resend webhook. Null turns the webhook off (503). */
+    resendWebhookSecret: string | null;
+    /**
+     * At most this many campaign emails per UTC day, over all campaigns. Null
+     * means no pace. Set it to the Resend plan's daily quota so a large
+     * campaign spreads over days instead of failing.
+     */
+    dailyLimit: number | null;
   };
 }
 
@@ -351,6 +378,8 @@ export function getConfig(): Config {
       resendApiKey: process.env.RESEND_API_KEY?.trim() || null,
       publicBaseUrl: publicBaseUrl(),
       linkSecret: emailLinkSecret(),
+      resendWebhookSecret: resendWebhookSecret(),
+      dailyLimit: emailDailyLimit(),
     },
   };
 

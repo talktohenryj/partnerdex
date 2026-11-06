@@ -24,6 +24,7 @@
     "contacts:dump": "tsx src/cli.ts contacts:dump",
     "contacts:coverage": "tsx src/cli.ts contacts:coverage",
     "contacts:import": "tsx src/cli.ts contacts:import",
+    "email:backfill": "tsx src/cli.ts email:backfill",
     "start": "node dist/cli.js serve",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
     "test": "node --test --import tsx test/*.test.ts"

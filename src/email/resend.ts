@@ -1,4 +1,4 @@
-import type { DomainStatus, EmailTransport, OutgoingEmail } from './transport.js';
+import type { DomainStatus, EmailRecord, EmailTransport, OutgoingEmail } from './transport.js';
 import { TransportError } from './transport.js';
 
 /**
@@ -61,8 +61,12 @@ async function call(
       parsed && typeof parsed === 'object' && typeof (parsed as { message?: unknown }).message === 'string'
         ? (parsed as { message: string }).message
         : `HTTP ${response.status}`;
+    const name =
+      parsed && typeof parsed === 'object' && typeof (parsed as { name?: unknown }).name === 'string'
+        ? (parsed as { name: string }).name
+        : null;
     const retryable = response.status === 429 || response.status >= 500;
-    throw new TransportError(`Resend: ${message}`, response.status, retryable);
+    throw new TransportError(`Resend: ${message}`, response.status, retryable, name);
   }
   return parsed;
 }
@@ -87,6 +91,17 @@ export function resendTransport(apiKey: string): EmailTransport {
     async sendOne(email) {
       const result = (await call(apiKey, 'POST', '/emails', payload(email))) as { id?: string } | null;
       return { id: String(result?.id ?? '') };
+    },
+
+    async getEmail(id): Promise<EmailRecord> {
+      const result = (await call(apiKey, 'GET', `/emails/${encodeURIComponent(id)}`)) as {
+        last_event?: unknown;
+        created_at?: unknown;
+      } | null;
+      return {
+        lastEvent: typeof result?.last_event === 'string' ? result.last_event : null,
+        createdAt: typeof result?.created_at === 'string' ? result.created_at : null,
+      };
     },
 
     async domainStatus(domain): Promise<DomainStatus> {

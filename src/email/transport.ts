@@ -20,11 +20,18 @@ export interface OutgoingEmail {
 
 export type DomainStatus = 'verified' | 'pending' | 'failed' | 'not_found';
 
+/** What Resend still knows about one sent email: only its latest event, no event times. */
+export interface EmailRecord {
+  lastEvent: string | null;
+  createdAt: string | null;
+}
+
 export interface EmailTransport {
   /** At most 100 emails. The ids come back in input order. */
   sendBatch(emails: OutgoingEmail[], idempotencyKey: string): Promise<{ ids: string[] }>;
   sendOne(email: OutgoingEmail): Promise<{ id: string }>;
   domainStatus(domain: string): Promise<DomainStatus>;
+  getEmail(id: string): Promise<EmailRecord>;
 }
 
 export class TransportError extends Error {
@@ -33,6 +40,8 @@ export class TransportError extends Error {
     readonly status: number | null,
     /** Network errors, 429, and 5xx: the same request may succeed later. */
     readonly retryable: boolean,
+    /** Resend's error `name`, such as daily_quota_exceeded. */
+    readonly code: string | null = null,
   ) {
     super(message);
     this.name = 'TransportError';

@@ -1,11 +1,13 @@
+import { getConfig } from '../config.js';
 import { getDb, type Db } from '../db/index.js';
-import { onSendStarted, refreshCounters, senderOf, type CampaignStatus, type SendStatus } from './campaigns.js';
+import { IDEMPOTENCY_WINDOW_ERROR, onSendStarted, refreshCounters, senderOf, type CampaignStatus, type SendStatus } from './campaigns.js';
 import { configBlockedReason } from './guard.js';
 import { preferenceUrls } from './links.js';
 import { isSubscribed } from './preferences.js';
 import { formatFrom, renderEmail, type MergeValues } from './render.js';
 import { getTransport, MAX_BATCH, TransportError, type OutgoingEmail } from './transport.js';
 import { getEmailType } from './types.js';
+import { nextUtcMidnight, sendWait, setSendWait, utcMidnight, type WaitReason } from './wait.js';
 
 /**
  * The send loop. Same shape as the sync scheduler: a chained setTimeout, so
@@ -25,12 +27,15 @@ const BUSY_MS = 1_000;
 const BACKOFF_START_MS = 5_000;
 const BACKOFF_MAX_MS = 5 * 60_000;
 export const IDEMPOTENCY_WINDOW_MS = 23 * 60 * 60_000;
+/** How often to try again after Resend's monthly quota: it has no fixed reset time we know. */
+export const MONTHLY_QUOTA_RETRY_MS = 60 * 60_000;
 
 export type TickOutcome =
   | { kind: 'idle' }
   | { kind: 'batch'; campaignId: string; batchKey: string; sent: number; failed: number; skipped: number }
   | { kind: 'retry'; campaignId: string; batchKey: string; error: string }
-  | { kind: 'finished'; campaignId: string; status: CampaignStatus };
+  | { kind: 'finished'; campaignId: string; status: CampaignStatus }
+  | { kind: 'waiting'; reason: WaitReason; until: string };
 
 interface SendRow {
   campaign_id: string;
@@ -112,6 +117,20 @@ function roomBeforePause(campaign: ActiveCampaign, db: Db): number {
     .prepare(`SELECT COUNT(*) AS n FROM email_sends WHERE campaign_id = ? AND status IN ('sent', 'failed')`)
     .get(campaign.id) as { n: number };
   return Math.max(0, Math.min(MAX_BATCH, campaign.pause_at - done.n));
+}
+
+/** Campaign emails sent since 00:00 UTC today, over all campaigns. Test sends are not in email_sends. */
+export function sentTodayUtc(db: Db, clock: () => number = Date.now): number {
+  const since = new Date(utcMidnight(clock())).toISOString();
+  return (
+    db.prepare(`SELECT COUNT(*) AS n FROM email_sends WHERE status = 'sent' AND sent_at >= ?`).get(since) as { n: number }
+  ).n;
+}
+
+function waitUntil(reason: WaitReason, until: number): TickOutcome {
+  const wait = { reason, until: new Date(until).toISOString() };
+  setSendWait(wait);
+  return { kind: 'waiting', ...wait };
 }
 
 /** Claim the next batch: re-check opt-outs, then mark up to `room` rows sending under one key. */
@@ -234,7 +253,7 @@ export async function runEmailTick(db: Db = getDb(), clock: () => number = Date.
     if (clock() - started > IDEMPOTENCY_WINDOW_MS) {
       db.prepare(
         `UPDATE email_sends SET status = 'failed', error = ? WHERE campaign_id = ? AND batch_key = ? AND status = 'sending'`,
-      ).run('idempotency window passed — check Resend before resending', campaign.id, key);
+      ).run(IDEMPOTENCY_WINDOW_ERROR, campaign.id, key);
       settle(campaign.id, db, clock);
       return { kind: 'batch', campaignId: campaign.id, batchKey: key, sent: 0, failed: rows.length, skipped: 0 };
     }
@@ -243,10 +262,21 @@ export async function runEmailTick(db: Db = getDb(), clock: () => number = Date.
       settle(campaign.id, db, clock);
       return campaign.status === 'cancelled' ? (finishIfDone(campaign, db, clock) ?? { kind: 'idle' }) : { kind: 'idle' };
     }
-    const room = roomBeforePause(campaign, db);
+    const wait = sendWait(clock());
+    if (wait) return { kind: 'waiting', ...wait };
+    let room = roomBeforePause(campaign, db);
     if (room === 0) {
       settle(campaign.id, db, clock);
       return { kind: 'idle' };
+    }
+    const limit = getConfig().email.dailyLimit;
+    if (limit !== null) {
+      const left = limit - sentTodayUtc(db, clock);
+      if (left <= 0) {
+        console.log(`[partnerdex] email daily limit of ${limit} reached; sending again after 00:00 UTC`);
+        return waitUntil('daily_limit', nextUtcMidnight(clock()));
+      }
+      room = Math.min(room, left);
     }
     const claimed = claimBatch(campaign, db, clock, room);
     if (!claimed) return finishIfDone(campaign, db, clock) ?? { kind: 'idle' };
@@ -269,6 +299,25 @@ export async function runEmailTick(db: Db = getDb(), clock: () => number = Date.
     ids = (await transport.sendBatch(rows.map((row) => outgoing(campaign, row, db)), key)).ids;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const quota =
+      error instanceof TransportError && (error.code === 'daily_quota_exceeded' || error.code === 'monthly_quota_exceeded')
+        ? error.code
+        : null;
+    if (quota) {
+      // A 429 means Resend sent nothing, so the rows go back in the queue and
+      // are claimed again later under a new key.
+      db.prepare(
+        `UPDATE email_sends SET status = 'queued', batch_key = NULL, error = NULL
+          WHERE campaign_id = ? AND batch_key = ? AND status = 'sending'`,
+      ).run(campaign.id, key);
+      settle(campaign.id, db, clock);
+      if (quota === 'daily_quota_exceeded') {
+        console.log(`[partnerdex] Resend daily quota reached; ${rows.length} emails wait for 00:00 UTC`);
+        return waitUntil('daily_quota', nextUtcMidnight(clock()));
+      }
+      console.log(`[partnerdex] Resend monthly quota reached; ${rows.length} emails wait; checking again in 1 hour`);
+      return waitUntil('monthly_quota', clock() + MONTHLY_QUOTA_RETRY_MS);
+    }
     if (error instanceof TransportError && !error.retryable) {
       db.prepare(
         `UPDATE email_sends SET status = 'failed', error = ? WHERE campaign_id = ? AND batch_key = ? AND status = 'sending'`,
@@ -319,6 +368,9 @@ async function tick(): Promise<void> {
       backoffMs = backoffMs ? Math.min(backoffMs * 2, BACKOFF_MAX_MS) : BACKOFF_START_MS;
       delay = backoffMs;
       console.warn(`[partnerdex] email batch ${outcome.batchKey} will retry in ${delay / 1000}s: ${outcome.error}`);
+    } else if (outcome.kind === 'waiting') {
+      backoffMs = 0;
+      delay = Math.max(BUSY_MS, Date.parse(outcome.until) - Date.now() + BUSY_MS);
     } else {
       backoffMs = 0;
       delay = outcome.kind === 'idle' ? IDLE_MS : BUSY_MS;

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { ContactShop, ContactSummary } from '../api';
 import { formatFullDate, formatValue } from '../format';
+import { LastEmailCell, useLastEmails } from './EmailLast';
 
 /**
  * The people behind one merchant, on that merchant's page.
@@ -228,6 +229,7 @@ export function CustomerContacts({
   selected: string | null;
   onSelect: (email: string | null) => void;
 }) {
+  const lastEmails = useLastEmails((rows ?? []).map((row) => row.contact.email));
   if (error) {
     return (
       <div className="notice error">
@@ -261,6 +263,7 @@ export function CustomerContacts({
                 <th>First seen</th>
                 <th>Last seen</th>
                 <th>Other stores</th>
+                <th>Last email</th>
               </tr>
             </thead>
             <tbody>
@@ -299,6 +302,7 @@ export function CustomerContacts({
                     <td>
                       {row.otherShops.length > 0 ? `+${row.otherShops.length}` : <span className="muted-cell">—</span>}
                     </td>
+                    <LastEmailCell email={row.contact.email} entry={lastEmails[row.contact.email.toLowerCase()]} />
                   </tr>
                 );
               })}

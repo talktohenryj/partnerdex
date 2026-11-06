@@ -170,6 +170,18 @@ fly secrets set RESEND_API_KEY=<key> PUBLIC_BASE_URL=https://<your-app>.fly.dev 
 
 A deploy during a send is safe. The send resumes after the restart, and Resend's idempotency key stops a batch going out twice.
 
+Delivery events: in Resend → Webhooks, add `https://<your-app>.fly.dev/api/email/webhooks/resend` with the events `email.delivered`, `email.bounced`, `email.complained`, `email.opened` and `email.clicked`, then set its signing secret. On Resend's free plan (100 emails a day) set the daily limit too:
+
+```bash
+fly secrets set RESEND_WEBHOOK_SECRET=whsec_<secret> EMAIL_DAILY_LIMIT=100
+```
+
+For a campaign sent before the webhook existed, read its delivery data once, after the webhook is live:
+
+```bash
+fly ssh console -C "node /app/dist/cli.js email:backfill --campaign=<campaign-id>"
+```
+
 ### Resilient Redeploys
 During deployments, the running container stops and restarts, which may interrupt an active sync loop. This is completely safe; PartnerDex's synchronization logic is fully incremental, re-reading records from a 3-day overlap window prior to the last known watermark to catch late-arriving events.
 

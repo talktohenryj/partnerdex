@@ -4,6 +4,7 @@ import { formatDomainCoverage, reportDomainCoverage } from './contacts/coverage.
 import { dumpContactsToFile, restoreContactsFromFile } from './contacts/dump.js';
 import { formatImportSummary, importContacts } from './contacts/import.js';
 import { getDb } from './db/index.js';
+import { backfillCampaign, formatBackfillSummary } from './email/backfill.js';
 import { partnerQuery, PartnerApiError } from './partner/client.js';
 import { HEALTHCHECK_QUERY } from './partner/queries.js';
 import { dispatchPending } from './notifications/dispatch.js';
@@ -29,6 +30,9 @@ Usage:
   partnerdex contacts:coverage   Check shops.myshopify_domain population (pre-import)
   partnerdex contacts:import --from=<contacts.csv> --app-id=<id> [--commit]
                                  Preview (default) or commit a contacts CSV
+  partnerdex email:backfill --campaign=<id>
+                                 Read delivery data for a campaign sent before the
+                                 Resend webhook was set up (one call per email)
 
 Metrics:
 ${listMetrics()
@@ -260,6 +264,18 @@ async function main(): Promise<void> {
             'Take a volume snapshot first: fly volumes snapshots create <volume-id>',
         );
       }
+      break;
+    }
+
+    case 'email:backfill': {
+      if (!flags.campaign) {
+        console.error('Usage: partnerdex email:backfill --campaign=<id>');
+        process.exitCode = 1;
+        break;
+      }
+      const db = getDb();
+      const summary = await backfillCampaign(flags.campaign, db);
+      console.log(formatBackfillSummary(flags.campaign, summary));
       break;
     }
 
