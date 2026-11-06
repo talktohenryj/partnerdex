@@ -7,7 +7,15 @@ import { isSubscribed } from './preferences.js';
 import { formatFrom, renderEmail, type MergeValues } from './render.js';
 import { getTransport, MAX_BATCH, TransportError, type OutgoingEmail } from './transport.js';
 import { getEmailType } from './types.js';
-import { nextUtcMidnight, sendWait, setSendWait, utcMidnight, type WaitReason } from './wait.js';
+import {
+  nextUtcMidnight,
+  noteResendDailyUsed,
+  resendDailyUsed,
+  sendWait,
+  setSendWait,
+  utcMidnight,
+  type WaitReason,
+} from './wait.js';
 
 /**
  * The send loop. Same shape as the sync scheduler: a chained setTimeout, so
@@ -271,7 +279,8 @@ export async function runEmailTick(db: Db = getDb(), clock: () => number = Date.
     }
     const limit = getConfig().email.dailyLimit;
     if (limit !== null) {
-      const left = limit - sentTodayUtc(db, clock);
+      const used = Math.max(sentTodayUtc(db, clock), resendDailyUsed(clock()) ?? 0);
+      const left = limit - used;
       if (left <= 0) {
         console.log(`[partnerdex] email daily limit of ${limit} reached; sending again after 00:00 UTC`);
         return waitUntil('daily_limit', nextUtcMidnight(clock()));
@@ -296,7 +305,9 @@ export async function runEmailTick(db: Db = getDb(), clock: () => number = Date.
 
   let ids: string[];
   try {
-    ids = (await transport.sendBatch(rows.map((row) => outgoing(campaign, row, db)), key)).ids;
+    const result = await transport.sendBatch(rows.map((row) => outgoing(campaign, row, db)), key);
+    ids = result.ids;
+    noteResendDailyUsed(result.dailyQuotaUsed, clock());
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const quota =

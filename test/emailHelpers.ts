@@ -10,7 +10,7 @@ import {
   type OutgoingEmail,
 } from '../src/email/transport.js';
 import { resetTestLimits } from '../src/email/campaigns.js';
-import { setSendWait } from '../src/email/wait.js';
+import { resetSendState } from '../src/email/wait.js';
 import { APP_ID, resetEnvironment, seed } from './helpers.js';
 
 export const SECRET = 'test-secret-test-secret-test-secret-0123';
@@ -37,13 +37,16 @@ export class FakeTransport implements EmailTransport {
   /** What getEmail() answers, by Resend id. A TransportError value is thrown. */
   records = new Map<string, EmailRecord | TransportError>();
   getEmailCalls: string[] = [];
+  /** x-resend-daily-quota: grows by each batch's size; null = header absent (paid plan). */
+  dailyQuotaUsed: number | null = null;
   private seq = 0;
 
   async sendBatch(emails: OutgoingEmail[], idempotencyKey: string) {
     this.calls.push({ kind: 'batch', key: idempotencyKey, emails });
     const failure = this.failures.shift();
     if (failure) throw failure;
-    return { ids: emails.map(() => `re_${++this.seq}`) };
+    if (this.dailyQuotaUsed !== null) this.dailyQuotaUsed += emails.length;
+    return { ids: emails.map(() => `re_${++this.seq}`), dailyQuotaUsed: this.dailyQuotaUsed };
   }
 
   async sendOne(email: OutgoingEmail) {
@@ -87,7 +90,7 @@ export function rejected(): TransportError {
 export function sendingSetup(env: Record<string, string> = SENDING_ENV): FakeTransport {
   resetEnvironment({ PARTNER_APP_IDS: APP_ID, ...env });
   resetTestLimits();
-  setSendWait(null);
+  resetSendState();
   const fake = new FakeTransport();
   setTransportForTests(fake);
   return fake;

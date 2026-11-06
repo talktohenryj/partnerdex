@@ -3,6 +3,7 @@ import type express from 'express';
 import { getConfig } from '../config.js';
 import { suppressContact } from '../contacts/upsert.js';
 import { getDb, type Db } from '../db/index.js';
+import { markResendFailed } from './campaigns.js';
 import { unsubscribeAllMarketing } from './preferences.js';
 
 /**
@@ -55,6 +56,7 @@ export interface ResendEvent {
   data?: {
     email_id?: unknown;
     bounce?: { type?: unknown } | null;
+    failed?: { reason?: unknown } | null;
   } | null;
 }
 
@@ -85,6 +87,13 @@ function eventTime(event: ResendEvent): string {
 
 export function applyResendEvent(event: ResendEvent, db: Db = getDb()): EventResult {
   const type = typeof event.type === 'string' ? event.type : '';
+  if (type === 'email.failed') {
+    const resendId = typeof event.data?.email_id === 'string' ? event.data.email_id : '';
+    if (!resendId) return 'ignored';
+    const reason = typeof event.data?.failed?.reason === 'string' ? event.data.failed.reason : null;
+    const outcome = markResendFailed(resendId, reason, db);
+    return outcome === 'unknown_email' ? 'unknown_email' : outcome === 'not_sent' ? 'ignored' : 'written';
+  }
   const column = STAMP[type];
   if (!column) return 'ignored';
   const resendId = typeof event.data?.email_id === 'string' ? event.data.email_id : '';

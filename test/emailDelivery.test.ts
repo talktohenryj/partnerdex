@@ -7,7 +7,9 @@ import {
   getCampaign,
   IDEMPOTENCY_WINDOW_ERROR,
   listSends,
+  markResendFailed,
   prepareCampaign,
+  cancelCampaign,
   retryFailed,
   startSend,
 } from '../src/email/campaigns.js';
@@ -16,6 +18,7 @@ import { emailHistory, lastEmailFor } from '../src/email/history.js';
 import { runEmailTick, sentTodayUtc, type TickOutcome } from '../src/email/runner.js';
 import { setTransportForTests } from '../src/email/transport.js';
 import { sendWait } from '../src/email/wait.js';
+import { applyResendEvent } from '../src/email/webhook.js';
 import { PAYING_OWNERS, SENDING_ENV, quota, rejected, saveSender, seedOwners, sendingSetup, type FakeTransport } from './emailHelpers.js';
 
 const DAY1 = Date.parse('2026-11-06T15:00:00.000Z');
@@ -68,6 +71,22 @@ describe('Resend quota and the daily limit', () => {
   afterEach(() => {
     setTransportForTests(null);
     closeDb();
+  });
+
+  it('resend batch reads the daily quota header', async () => {
+    const { resendTransport } = await import('../src/email/resend.js');
+    const original = globalThis.fetch;
+    const reply = (headers: Record<string, string>) =>
+      (async () => new Response(JSON.stringify({ data: [{ id: 're_1' }] }), { status: 200, headers })) as typeof fetch;
+    const email = { from: 'a@b.c', to: 'd@e.f', subject: 's', text: 't', html: 'h', headers: {} };
+    try {
+      globalThis.fetch = reply({ 'x-resend-daily-quota': '42' });
+      assert.deepEqual(await resendTransport('re_test').sendBatch([email], 'k'), { ids: ['re_1'], dailyQuotaUsed: 42 });
+      globalThis.fetch = reply({});
+      assert.deepEqual(await resendTransport('re_test').sendBatch([email], 'k'), { ids: ['re_1'], dailyQuotaUsed: null });
+    } finally {
+      globalThis.fetch = original;
+    }
   });
 
   it('resend error name read into code', async () => {
@@ -131,6 +150,24 @@ describe('Resend quota and the daily limit', () => {
       assert.equal(getCampaign(id)!.status, 'sent');
       assert.equal(getCampaign(id)!.waiting, null);
     });
+
+    it('daily limit uses resend count when it is higher', async () => {
+      seedOwners(60);
+      const id = await prepared();
+      startSend(id, 60, getDb(), Date.now, 10);
+      // Resend counts 80 more than PartnerDex: test sends and other apps count too.
+      fake.dailyQuotaUsed = 80;
+      await drain(() => DAY1);
+      const { resumeCampaign } = await import('../src/email/campaigns.js');
+      resumeCampaign(id);
+      const outcome = await drain(() => DAY1);
+      assert.equal(outcome.kind, 'waiting');
+      assert.deepEqual(fake.batches().map((call) => call.emails.length), [10, 10]);
+      // Next day the old count no longer applies.
+      fake.dailyQuotaUsed = null;
+      await drain(() => MIDNIGHT + 1_000);
+      assert.deepEqual(fake.batches().map((call) => call.emails.length), [10, 10, 40]);
+    });
   });
 
   describe('without a daily limit', () => {
@@ -192,6 +229,88 @@ describe('Resend quota and the daily limit', () => {
       await drain(() => DAY1);
       assert.deepEqual(fake.batches().map((call) => call.key), [`${id}:1`, `${id}:1`]);
     });
+  });
+});
+
+describe('Resend email.failed', () => {
+  let fake: FakeTransport;
+  beforeEach(() => {
+    fake = sendingSetup();
+    saveSender();
+  });
+  afterEach(() => {
+    setTransportForTests(null);
+    closeDb();
+  });
+
+  async function sentCampaign(count: number) {
+    seedOwners(count);
+    const id = await prepared();
+    startSend(id, count);
+    await drain(() => DAY1);
+    const ids = getDb()
+      .prepare(`SELECT resend_id AS id FROM email_sends WHERE campaign_id = ? ORDER BY email`)
+      .all(id) as Array<{ id: string }>;
+    return { id, resendIds: ids.map((row) => row.id) };
+  }
+
+  it('reached_daily_quota requeues the email and opens the campaign again', async () => {
+    const { id, resendIds } = await sentCampaign(5);
+    assert.equal(getCampaign(id)!.status, 'sent');
+    const result = applyResendEvent({
+      type: 'email.failed',
+      data: { email_id: resendIds[0], failed: { reason: 'reached_daily_quota' } },
+    });
+    assert.equal(result, 'written');
+    assert.deepEqual(statuses(id), { sent: 4, queued: 1 });
+    const campaign = getCampaign(id)!;
+    assert.equal(campaign.status, 'sending');
+    assert.equal(campaign.finishedAt, null);
+    assert.equal(campaign.waiting?.reason, 'daily_quota');
+    const row = getDb().prepare(`SELECT resend_id, sent_at FROM email_sends WHERE campaign_id = ? AND status = 'queued'`).get(id) as {
+      resend_id: string | null;
+      sent_at: string | null;
+    };
+    assert.deepEqual(row, { resend_id: null, sent_at: null });
+    // After 00:00 UTC it goes out under a new key.
+    const after = Date.parse(sendWait()!.until) + 1_000;
+    const done = await drain(() => after);
+    assert.equal(done.kind, 'finished');
+    assert.deepEqual(statuses(id), { sent: 5 });
+    assert.equal(fake.batches().at(-1)!.emails.length, 1);
+  });
+
+  it('another reason fails the email for retry failed', async () => {
+    const { id, resendIds } = await sentCampaign(3);
+    applyResendEvent({ type: 'email.failed', data: { email_id: resendIds[1], failed: { reason: 'invalid_recipient' } } });
+    assert.deepEqual(statuses(id), { sent: 2, failed: 1 });
+    assert.equal(getCampaign(id)!.status, 'sent');
+    const groups = failureGroups(id);
+    assert.deepEqual(groups.map((group) => [group.error, group.count, group.rejected]), [
+      ['Resend could not send: invalid_recipient', 1, true],
+    ]);
+    retryFailed(id, ['Resend could not send: invalid_recipient'], 1);
+    await drain(() => DAY1 + 1_000);
+    assert.deepEqual(statuses(id), { sent: 3 });
+  });
+
+  it('a cancelled campaign is not opened again', async () => {
+    seedOwners(30);
+    const id = await prepared();
+    startSend(id, 30, getDb(), Date.now, 10);
+    await drain(() => DAY1);
+    cancelCampaign(id);
+    const resendId = (getDb().prepare(`SELECT resend_id AS id FROM email_sends WHERE campaign_id = ? AND status = 'sent' LIMIT 1`).get(id) as { id: string }).id;
+    assert.equal(markResendFailed(resendId, 'reached_daily_quota'), 'failed');
+    assert.equal(getCampaign(id)!.status, 'cancelled');
+    assert.equal(statuses(id).failed, 1);
+  });
+
+  it('an unknown or already failed email is left alone', async () => {
+    const { resendIds } = await sentCampaign(1);
+    assert.equal(markResendFailed('not-ours', 'reached_daily_quota'), 'unknown_email');
+    assert.equal(markResendFailed(resendIds[0]!, 'invalid_recipient'), 'failed');
+    assert.equal(markResendFailed(resendIds[0]!, 'reached_daily_quota'), 'not_sent');
   });
 });
 

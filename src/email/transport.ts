@@ -28,7 +28,8 @@ export interface EmailRecord {
 
 export interface EmailTransport {
   /** At most 100 emails. The ids come back in input order. */
-  sendBatch(emails: OutgoingEmail[], idempotencyKey: string): Promise<{ ids: string[] }>;
+  /** dailyQuotaUsed: Resend's count of emails used today, when it sends one (free plan). */
+  sendBatch(emails: OutgoingEmail[], idempotencyKey: string): Promise<{ ids: string[]; dailyQuotaUsed?: number | null }>;
   sendOne(email: OutgoingEmail): Promise<{ id: string }>;
   domainStatus(domain: string): Promise<DomainStatus>;
   getEmail(id: string): Promise<EmailRecord>;

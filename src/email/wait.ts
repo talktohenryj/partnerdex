@@ -37,3 +37,26 @@ export function utcMidnight(now: number): number {
   const day = new Date(now);
   return Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate());
 }
+
+/**
+ * Resend's own count of emails used today (x-resend-daily-quota). It also
+ * counts test sends, other apps on the same Resend account, and received
+ * mail, which email_sends does not see.
+ */
+let resendUsed: { day: number; used: number } | null = null;
+
+export function noteResendDailyUsed(used: number | null | undefined, now: number): void {
+  if (used === null || used === undefined) return;
+  resendUsed = { day: utcMidnight(now), used };
+}
+
+/** Resend's used count for the UTC day of `now`, or null when unknown or from another day. */
+export function resendDailyUsed(now: number): number | null {
+  return resendUsed && resendUsed.day === utcMidnight(now) ? resendUsed.used : null;
+}
+
+/** Test seam: forget the wait and Resend's count. */
+export function resetSendState(): void {
+  current = null;
+  resendUsed = null;
+}

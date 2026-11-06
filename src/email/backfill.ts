@@ -1,5 +1,5 @@
 import { getDb, type Db } from '../db/index.js';
-import { getCampaignRow } from './campaigns.js';
+import { getCampaignRow, markResendFailed } from './campaigns.js';
 import { EmailError } from './errors.js';
 import { unsubscribeAllMarketing } from './preferences.js';
 import { getTransport, TransportError, type EmailTransport } from './transport.js';
@@ -31,6 +31,8 @@ export interface BackfillSummary {
   clicked: number;
   bounced: number;
   complained: number;
+  /** Resend reports these as not sent; marked failed for Retry failed. */
+  failed: number;
   /** last_event values with nothing to write (sent, queued, delivery_delayed, …). */
   other: number;
   errors: number;
@@ -76,7 +78,9 @@ export async function backfillCampaign(id: string, db: Db = getDb(), options: Ba
     )
     .all(id) as Array<{ email: string; resend_id: string; sent_at: string | null }>;
 
-  const summary: BackfillSummary = { read: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0, other: 0, errors: 0 };
+  const summary: BackfillSummary = {
+    read: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0, failed: 0, other: 0, errors: 0,
+  };
   for (const [index, row] of rows.entries()) {
     if (index > 0) await sleep(BACKFILL_SPACING_MS);
     let record: Awaited<ReturnType<EmailTransport['getEmail']>> | null = null;
@@ -96,6 +100,11 @@ export async function backfillCampaign(id: string, db: Db = getDb(), options: Ba
     }
     summary.read += 1;
     const event = record.lastEvent ?? '';
+    if (event === 'failed') {
+      // GET /emails/:id gives no reason, so the row is failed, not requeued: a person retries it.
+      if (markResendFailed(row.resend_id, null, db) === 'failed') summary.failed += 1;
+      continue;
+    }
     const columns = IMPLIES[event];
     if (!columns) {
       summary.other += 1;
@@ -115,8 +124,13 @@ export function formatBackfillSummary(id: string, summary: BackfillSummary): str
   const lines = [
     `Backfill of campaign ${id}: ${summary.read} read, ${summary.errors} could not be read.`,
     `  last event: ${summary.clicked} clicked, ${summary.opened} opened, ${summary.delivered} delivered, ` +
-      `${summary.bounced} bounced, ${summary.complained} complained, ${summary.other} other.`,
+      `${summary.bounced} bounced, ${summary.complained} complained, ${summary.failed} failed, ${summary.other} other.`,
   ];
+  if (summary.failed > 0) {
+    lines.push(
+      `  ${summary.failed} failed at Resend (not sent). They are marked failed; use Retry failed on the campaign page.`,
+    );
+  }
   if (summary.bounced > 0) {
     lines.push(
       `  ${summary.bounced} bounced. Resend does not say hard or soft, so none were suppressed. ` +

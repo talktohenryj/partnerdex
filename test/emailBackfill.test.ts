@@ -47,7 +47,7 @@ describe('one-time backfill', () => {
     const events = ['clicked', 'opened', 'delivered', 'bounced', 'delivery_delayed'];
     sends.forEach((send, index) => fake.records.set(send.resendId, { lastEvent: events[index]!, createdAt: CREATED }));
     const summary = await backfillCampaign(id, getDb(), { transport: fake, sleep: noSleep });
-    assert.deepEqual(summary, { read: 5, delivered: 1, opened: 1, clicked: 1, bounced: 1, complained: 0, other: 1, errors: 0 });
+    assert.deepEqual(summary, { read: 5, delivered: 1, opened: 1, clicked: 1, bounced: 1, complained: 0, failed: 0, other: 1, errors: 0 });
     assert.deepEqual(row(sends[0]!.resendId), {
       delivered_at: CREATED_ISO, opened_at: CREATED_ISO, clicked_at: CREATED_ISO, bounced_at: null, complained_at: null,
     });
@@ -123,5 +123,17 @@ describe('one-time backfill', () => {
     assert.equal(resendTime('2026-11-05T14:02:11.000Z', 'x'), '2026-11-05T14:02:11.000Z');
     assert.equal(resendTime('nonsense', 'fallback'), 'fallback');
     assert.equal(resendTime(null, 'fallback'), 'fallback');
+  });
+
+  it('backfill marks a failed email failed, for retry', async () => {
+    const { id, sends } = await sentCampaign(2);
+    fake.records.set(sends[0]!.resendId, { lastEvent: 'failed', createdAt: CREATED });
+    const summary = await backfillCampaign(id, getDb(), { transport: fake, sleep: noSleep });
+    assert.equal(summary.failed, 1);
+    const failed = getDb()
+      .prepare(`SELECT status, error FROM email_sends WHERE resend_id = ?`)
+      .get(sends[0]!.resendId) as { status: string; error: string };
+    assert.deepEqual(failed, { status: 'failed', error: 'Resend could not send: no reason given' });
+    assert.match(formatBackfillSummary(id, summary), /1 failed at Resend \(not sent\)/);
   });
 });

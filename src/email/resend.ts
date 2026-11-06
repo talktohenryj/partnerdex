@@ -27,7 +27,7 @@ async function call(
   path: string,
   body?: unknown,
   headers: Record<string, string> = {},
-): Promise<unknown> {
+): Promise<{ body: unknown; headers: Headers }> {
   let response: Response;
   try {
     response = await fetch(`${API}${path}`, {
@@ -68,15 +68,24 @@ async function call(
     const retryable = response.status === 429 || response.status >= 500;
     throw new TransportError(`Resend: ${message}`, response.status, retryable, name);
   }
-  return parsed;
+  return { body: parsed, headers: response.headers };
+}
+
+/** x-resend-daily-quota: emails used today, sent on the free plan only. */
+function dailyQuotaUsed(headers: Headers): number | null {
+  const raw = headers.get('x-resend-daily-quota');
+  if (raw === null || raw.trim() === '') return null;
+  const used = Number(raw);
+  return Number.isFinite(used) && used >= 0 ? Math.trunc(used) : null;
 }
 
 export function resendTransport(apiKey: string): EmailTransport {
   return {
     async sendBatch(emails, idempotencyKey) {
-      const result = (await call(apiKey, 'POST', '/emails/batch', emails.map(payload), {
+      const response = await call(apiKey, 'POST', '/emails/batch', emails.map(payload), {
         'Idempotency-Key': idempotencyKey,
-      })) as { data?: Array<{ id?: string }> } | null;
+      });
+      const result = response.body as { data?: Array<{ id?: string }> } | null;
       const ids = (result?.data ?? []).map((entry) => String(entry.id ?? ''));
       if (ids.length !== emails.length) {
         throw new TransportError(
@@ -85,16 +94,16 @@ export function resendTransport(apiKey: string): EmailTransport {
           false,
         );
       }
-      return { ids };
+      return { ids, dailyQuotaUsed: dailyQuotaUsed(response.headers) };
     },
 
     async sendOne(email) {
-      const result = (await call(apiKey, 'POST', '/emails', payload(email))) as { id?: string } | null;
+      const result = (await call(apiKey, 'POST', '/emails', payload(email))).body as { id?: string } | null;
       return { id: String(result?.id ?? '') };
     },
 
     async getEmail(id): Promise<EmailRecord> {
-      const result = (await call(apiKey, 'GET', `/emails/${encodeURIComponent(id)}`)) as {
+      const result = (await call(apiKey, 'GET', `/emails/${encodeURIComponent(id)}`)).body as {
         last_event?: unknown;
         created_at?: unknown;
       } | null;
@@ -105,7 +114,7 @@ export function resendTransport(apiKey: string): EmailTransport {
     },
 
     async domainStatus(domain): Promise<DomainStatus> {
-      const result = (await call(apiKey, 'GET', '/domains')) as {
+      const result = (await call(apiKey, 'GET', '/domains')).body as {
         data?: Array<{ name?: string; status?: string }>;
       } | null;
       const wanted = domain.toLowerCase();

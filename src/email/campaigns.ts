@@ -25,7 +25,7 @@ import {
 import { fromDomain, getSettings } from './settings.js';
 import { getTransport, type EmailTransport } from './transport.js';
 import { getEmailType, listEmailTypes } from './types.js';
-import { sendWait, type SendWait } from './wait.js';
+import { nextUtcMidnight, sendWait, setSendWait, type SendWait } from './wait.js';
 
 /**
  * Campaigns: one email to one audience, from draft to sent.
@@ -1015,6 +1015,66 @@ export function refreshCounters(id: string, db: Db = getDb()): Record<SendStatus
 /** The error S3 writes when a batch outlives Resend's idempotency key. */
 export const IDEMPOTENCY_WINDOW_ERROR = 'idempotency window passed — check Resend before resending';
 
+/** The start of the error on a row Resend accepted and then reported as failed (email.failed). */
+export const RESEND_FAILED_PREFIX = 'Resend could not send';
+
+/** Rows that can be sent again: Resend never accepted them, or it said it did not send them. */
+const RETRYABLE_ROW = `(resend_id IS NULL OR error LIKE '${RESEND_FAILED_PREFIX}%')`;
+
+export type ResendFailedOutcome = 'requeued' | 'failed' | 'unknown_email' | 'not_sent';
+
+/**
+ * Resend accepted an email and then reported that it did not send it.
+ *
+ * reached_daily_quota: Resend sent nothing, so the row goes back in the queue
+ * and the loop waits until 00:00 UTC, the same as a 429 quota answer. A
+ * finished campaign opens again to send it; a cancelled one does not.
+ * Any other reason, or an unknown one: the row is failed with the reason, and
+ * Retry failed can send it again.
+ */
+export function markResendFailed(
+  resendId: string,
+  reason: string | null,
+  db: Db = getDb(),
+  clock: () => number = Date.now,
+): ResendFailedOutcome {
+  const row = db.prepare('SELECT campaign_id, email, status FROM email_sends WHERE resend_id = ?').get(resendId) as
+    | { campaign_id: string; email: string; status: SendStatus }
+    | undefined;
+  if (!row) return 'unknown_email';
+  if (row.status !== 'sent') return 'not_sent';
+  const campaign = requireRow(row.campaign_id, db);
+  const at = new Date(clock()).toISOString();
+
+  if (reason === 'reached_daily_quota' && campaign.status !== 'cancelled') {
+    db.transaction(() => {
+      db.prepare(
+        `UPDATE email_sends SET status = 'queued', batch_key = NULL, resend_id = NULL, sent_at = NULL, error = NULL
+          WHERE campaign_id = ? AND email = ?`,
+      ).run(row.campaign_id, row.email);
+      if (campaign.status === 'sent' || campaign.status === 'failed') {
+        db.prepare(
+          `UPDATE email_campaigns SET status = 'sending', pause_at = NULL, finished_at = NULL, updated_at = ? WHERE id = ?`,
+        ).run(at, row.campaign_id);
+      }
+      refreshCounters(row.campaign_id, db);
+    })();
+    setSendWait({ reason: 'daily_quota', until: new Date(nextUtcMidnight(clock())).toISOString() });
+    return 'requeued';
+  }
+
+  const text = `${RESEND_FAILED_PREFIX}: ${reason ?? 'no reason given'}`;
+  db.transaction(() => {
+    db.prepare(`UPDATE email_sends SET status = 'failed', error = ? WHERE campaign_id = ? AND email = ?`).run(
+      text.slice(0, 500),
+      row.campaign_id,
+      row.email,
+    );
+    refreshCounters(row.campaign_id, db);
+  })();
+  return 'failed';
+}
+
 export interface FailureGroup {
   error: string;
   count: number;
@@ -1030,7 +1090,7 @@ export function failureGroups(id: string, db: Db = getDb()): FailureGroup[] {
   const rows = db
     .prepare(
       `SELECT COALESCE(error, '') AS error, COUNT(*) AS n FROM email_sends
-        WHERE campaign_id = ? AND status = 'failed' AND resend_id IS NULL
+        WHERE campaign_id = ? AND status = 'failed' AND ${RETRYABLE_ROW}
         GROUP BY COALESCE(error, '') ORDER BY n DESC, error`,
     )
     .all(id) as Array<{ error: string; n: number }>;
@@ -1044,7 +1104,8 @@ export function failureGroups(id: string, db: Db = getDb()): FailureGroup[] {
 
 /**
  * Put the failed rows with the chosen errors back in the queue and send the
- * campaign again. A row with a resend_id never moves: Resend accepted it.
+ * campaign again. A row with a resend_id moves only when Resend reported it
+ * failed (email.failed); otherwise Resend accepted it and it stays.
  * `confirmCount` must be the number of rows that will move.
  */
 export function retryFailed(id: string, errors: unknown, confirmCount: unknown, db: Db = getDb()): Campaign {
@@ -1058,7 +1119,7 @@ export function retryFailed(id: string, errors: unknown, confirmCount: unknown, 
   }
   const chosen = errors as string[];
   const marks = chosen.map(() => '?').join(', ');
-  const match = `campaign_id = ? AND status = 'failed' AND resend_id IS NULL AND COALESCE(error, '') IN (${marks})`;
+  const match = `campaign_id = ? AND status = 'failed' AND ${RETRYABLE_ROW} AND COALESCE(error, '') IN (${marks})`;
   const count = (db.prepare(`SELECT COUNT(*) AS n FROM email_sends WHERE ${match}`).get(id, ...chosen) as { n: number }).n;
   if (count === 0) throw new EmailError('No failed emails match those groups.', 409);
   if (typeof confirmCount === 'boolean' || Number(confirmCount) !== count) {
@@ -1066,7 +1127,9 @@ export function retryFailed(id: string, errors: unknown, confirmCount: unknown, 
   }
   const at = now();
   db.transaction(() => {
-    db.prepare(`UPDATE email_sends SET status = 'queued', batch_key = NULL, error = NULL WHERE ${match}`).run(id, ...chosen);
+    db.prepare(
+      `UPDATE email_sends SET status = 'queued', batch_key = NULL, resend_id = NULL, sent_at = NULL, error = NULL WHERE ${match}`,
+    ).run(id, ...chosen);
     db.prepare(
       `UPDATE email_campaigns SET status = 'sending', pause_at = NULL, finished_at = NULL, updated_at = ? WHERE id = ?`,
     ).run(at, id);
