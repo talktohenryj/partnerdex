@@ -965,6 +965,20 @@ export interface CampaignInput {
   emailType?: string;
 }
 
+export type PreviewFilter = 'all' | 'blank' | 'nolink';
+
+export interface PreviewRecipient {
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  shopName: string | null;
+  status: string | null;
+  /** Merge fields this email uses that are blank for this person. */
+  blank: string[];
+  /** Page keys this email uses that have no link for this person's store. */
+  noLink: string[];
+}
+
 export interface RenderedPreview {
   subject: string;
   text: string;
@@ -972,6 +986,18 @@ export interface RenderedPreview {
   from: string;
   replyTo: string;
   to: string;
+  recipient: PreviewRecipient;
+  position: { index: number | null; total: number; prevEmail: string | null; nextEmail: string | null };
+  variables: Array<{ key: string; value: string | null; used: boolean; fallbacks: string[] }>;
+  pages: Array<{ key: string; label: string; url: string | null; used: boolean }>;
+  blankCount: number;
+}
+
+export interface PreviewRecipientList {
+  total: number;
+  counts: Record<PreviewFilter, number>;
+  matching: number;
+  rows: PreviewRecipient[];
 }
 
 export interface PrepareResult {
@@ -1017,11 +1043,34 @@ export const updateCampaign = (id: string, input: CampaignInput): Promise<EmailC
 export const deleteCampaign = (id: string): Promise<void> =>
   sendJson('DELETE', `/api/email/campaigns/${encodeURIComponent(id)}`);
 
-export const renderCampaign = (id: string): Promise<RenderedPreview> =>
-  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/render`);
+export const renderCampaign = (
+  id: string,
+  as: { email?: string | null; filter?: PreviewFilter } = {},
+): Promise<RenderedPreview> =>
+  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/render`, {
+    email: as.email ?? undefined,
+    filter: as.filter ?? 'all',
+  });
 
-export const sendTestEmail = (id: string, to: string): Promise<{ id: string; to: string; subject: string }> =>
-  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/test`, { to });
+export const fetchPreviewRecipients = (
+  id: string,
+  options: { q?: string; filter?: PreviewFilter; offset?: number; limit?: number } = {},
+): Promise<PreviewRecipientList> => {
+  const params = new URLSearchParams();
+  if (options.q) params.set('q', options.q);
+  if (options.filter && options.filter !== 'all') params.set('filter', options.filter);
+  if (options.offset) params.set('offset', String(options.offset));
+  if (options.limit) params.set('limit', String(options.limit));
+  return getJson(`/api/email/campaigns/${encodeURIComponent(id)}/recipients?${params.toString()}`);
+};
+
+/** `as` is whose values the test uses; it still goes to `to`. */
+export const sendTestEmail = (
+  id: string,
+  to: string,
+  as?: string | null,
+): Promise<{ id: string; to: string; subject: string }> =>
+  sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/test`, { to, as: as ?? undefined });
 
 export const prepareCampaign = (id: string): Promise<PrepareResult> =>
   sendJson('POST', `/api/email/campaigns/${encodeURIComponent(id)}/prepare`);

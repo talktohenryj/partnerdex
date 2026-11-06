@@ -9,11 +9,15 @@ import { sendingBlockedReason } from './guard.js';
 import { preferenceUrls, TEST_SOURCE } from './links.js';
 import { isSubscribed } from './preferences.js';
 import {
+  fallbacksIn,
+  fieldsIn,
   firstNameWithoutFallback,
   formatFrom,
+  MERGE_FIELDS,
   pageKeysIn,
   renderEmail,
   validateTemplate,
+  type MergeField,
   type MergeValues,
   type RenderedEmail,
   type Sender,
@@ -395,46 +399,249 @@ function typeLabel(key: string, db: Db): string {
   return getEmailType(key, db)?.label ?? key;
 }
 
-/** The first prepared recipient, else the first resolved one, else placeholders. */
-function sampleMerge(row: CampaignRow, db: Db): { merge: MergeValues; email: string } {
-  const prepared = db
-    .prepare(`SELECT email, merge FROM email_sends WHERE campaign_id = ? ORDER BY email LIMIT 1`)
-    .get(row.id) as { email: string; merge: string } | undefined;
-  if (prepared) return { merge: JSON.parse(prepared.merge) as MergeValues, email: prepared.email };
-  const definition = JSON.parse(row.audience) as AudienceDefinition;
-  try {
-    const first = resolveAudience(definition, db).recipients[0];
-    if (first) return { merge: mergeFor(first, definition.appId, db), email: first.email };
-  } catch {
-    // An audience whose app left scope still previews with placeholders.
-  }
-  return { merge: placeholderMerge(definition.appId, db), email: 'alex@example.com' };
+// ---------------------------------------------------------------------------
+// Preview as a recipient
+
+export type PreviewFilter = 'all' | 'blank' | 'nolink';
+
+interface PoolEntry {
+  email: string;
+  merge: MergeValues;
 }
 
 /**
- * The preview the compose screen shows. Uses the saved sender settings when
- * the campaign is not prepared, and never needs RESEND_API_KEY.
+ * Who the preview can show: the frozen list once the campaign is prepared
+ * (not the skipped rows), else the audience as it resolves now. Sorted by
+ * email, the order the send uses.
  */
-export function renderPreview(id: string, db: Db = getDb()): RenderedEmail & { from: string; replyTo: string; to: string } {
+function previewPool(row: CampaignRow, db: Db): PoolEntry[] {
+  const prepared = db
+    .prepare(
+      `SELECT email, merge FROM email_sends WHERE campaign_id = ? AND status <> 'skipped' ORDER BY email`,
+    )
+    .all(row.id) as Array<{ email: string; merge: string }>;
+  if (prepared.length > 0) {
+    return prepared.map((entry) => ({ email: entry.email, merge: JSON.parse(entry.merge) as MergeValues }));
+  }
+  const definition = JSON.parse(row.audience) as AudienceDefinition;
+  try {
+    const links = getAppLinks(definition.appId, db);
+    return resolveAudience(definition, db)
+      .recipients.map((recipient) => ({ email: recipient.email, merge: mergeFor(recipient, definition.appId, db, links) }))
+      .sort((a, b) => a.email.localeCompare(b.email));
+  } catch {
+    // An audience whose app left scope previews with placeholders.
+    return [];
+  }
+}
+
+interface Usage {
+  fields: MergeField[];
+  fallbacks: Partial<Record<MergeField, string[]>>;
+  pages: string[];
+}
+
+function usageOf(row: CampaignRow): Usage {
+  try {
+    return {
+      fields: fieldsIn(row.subject, row.preview_text, row.body),
+      fallbacks: fallbacksIn(row.subject, row.preview_text, row.body),
+      pages: pageKeysIn(row.body),
+    };
+  } catch {
+    return { fields: [], fallbacks: {}, pages: [] };
+  }
+}
+
+/** The used fields that are blank for this person, and the used pages with no link for their store. */
+function gapsOf(merge: MergeValues, usage: Usage): { blank: MergeField[]; noLink: string[] } {
+  return {
+    blank: usage.fields.filter((field) => !(merge.fields[field] ?? '').trim()),
+    noLink: usage.pages.filter((key) => !merge.pages[key]),
+  };
+}
+
+function matchesFilter(merge: MergeValues, usage: Usage, filter: PreviewFilter): boolean {
+  if (filter === 'all') return true;
+  const gaps = gapsOf(merge, usage);
+  return filter === 'blank' ? gaps.blank.length > 0 : gaps.noLink.length > 0;
+}
+
+export function asFilter(value: unknown): PreviewFilter {
+  return value === 'blank' || value === 'nolink' ? value : 'all';
+}
+
+export interface PreviewRecipientRow {
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  shopName: string | null;
+  status: string | null;
+  blank: string[];
+  noLink: string[];
+}
+
+function rowOf(entry: PoolEntry, usage: Usage): PreviewRecipientRow {
+  const gaps = gapsOf(entry.merge, usage);
+  return {
+    email: entry.email,
+    firstName: entry.merge.fields.first_name ?? null,
+    lastName: entry.merge.fields.last_name ?? null,
+    shopName: entry.merge.fields.shop_name ?? null,
+    status: entry.merge.fields.store_status ?? null,
+    blank: gaps.blank,
+    noLink: gaps.noLink,
+  };
+}
+
+/** The picker's list: search by name, email, or store, and filter to the people with a gap. */
+export function previewRecipients(
+  id: string,
+  options: { q?: string; filter?: PreviewFilter; offset?: number; limit?: number } = {},
+  db: Db = getDb(),
+): {
+  total: number;
+  counts: Record<PreviewFilter, number>;
+  matching: number;
+  rows: PreviewRecipientRow[];
+} {
+  const row = requireRow(id, db);
+  const usage = usageOf(row);
+  const pool = previewPool(row, db);
+  const filter = options.filter ?? 'all';
+  const term = (options.q ?? '').trim().toLowerCase();
+  const counts: Record<PreviewFilter, number> = { all: pool.length, blank: 0, nolink: 0 };
+  for (const entry of pool) {
+    const gaps = gapsOf(entry.merge, usage);
+    if (gaps.blank.length) counts.blank += 1;
+    if (gaps.noLink.length) counts.nolink += 1;
+  }
+  const matching = pool.filter((entry) => {
+    if (!matchesFilter(entry.merge, usage, filter)) return false;
+    if (!term) return true;
+    const f = entry.merge.fields;
+    return [entry.email, f.first_name, f.last_name, f.shop_name, f.myshopify_domain]
+      .some((value) => (value ?? '').toLowerCase().includes(term));
+  });
+  const offset = Math.max(0, Math.trunc(options.offset ?? 0));
+  const limit = Math.min(Math.max(Math.trunc(options.limit ?? 50), 1), 200);
+  return {
+    total: pool.length,
+    counts,
+    matching: matching.length,
+    rows: matching.slice(offset, offset + limit).map((entry) => rowOf(entry, usage)),
+  };
+}
+
+/** The person to preview: the one asked for, else the first in the filter, else placeholders. */
+function choose(
+  row: CampaignRow,
+  db: Db,
+  email: unknown,
+  filter: PreviewFilter = 'all',
+): {
+  entry: PoolEntry;
+  usage: Usage;
+  position: { index: number | null; total: number; prevEmail: string | null; nextEmail: string | null };
+} {
+  const usage = usageOf(row);
+  const pool = previewPool(row, db);
+  const list = filter === 'all' ? pool : pool.filter((entry) => matchesFilter(entry.merge, usage, filter));
+  const wanted = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  const entry =
+    (wanted && (list.find((candidate) => candidate.email === wanted) ?? pool.find((candidate) => candidate.email === wanted))) ||
+    list[0] ||
+    pool[0] || { email: 'alex@example.com', merge: placeholderMerge((JSON.parse(row.audience) as AudienceDefinition).appId, db) };
+  const at = list.indexOf(entry);
+  // Arrows step through the filtered list and wrap; from outside it, they start at its ends.
+  const prev = list.length ? list[at >= 0 ? (at - 1 + list.length) % list.length : list.length - 1]! : null;
+  const next = list.length ? list[at >= 0 ? (at + 1) % list.length : 0]! : null;
+  return {
+    entry,
+    usage,
+    position: {
+      index: at >= 0 ? at + 1 : null,
+      total: list.length,
+      prevEmail: prev && prev !== entry ? prev.email : null,
+      nextEmail: next && next !== entry ? next.email : null,
+    },
+  };
+}
+
+export interface PreviewVariable {
+  key: string;
+  value: string | null;
+  used: boolean;
+  /** What a blank shows instead, one per distinct fallback the email uses. */
+  fallbacks: string[];
+}
+
+export interface PreviewPage {
+  key: string;
+  label: string;
+  url: string | null;
+  used: boolean;
+}
+
+/**
+ * The preview the compose screen shows, as one recipient. Uses the saved
+ * sender settings when the campaign is not prepared, and never needs
+ * RESEND_API_KEY. Fallback values and missing links are marked, for the
+ * dashboard only.
+ */
+export function renderPreview(
+  id: string,
+  options: { email?: unknown; filter?: PreviewFilter } = {},
+  db: Db = getDb(),
+): RenderedEmail & {
+  from: string;
+  replyTo: string;
+  to: string;
+  recipient: PreviewRecipientRow;
+  position: { index: number | null; total: number; prevEmail: string | null; nextEmail: string | null };
+  variables: PreviewVariable[];
+  pages: PreviewPage[];
+  blankCount: number;
+} {
   const row = requireRow(id, db);
   const settings = getSettings(db);
   const sender = senderOf(row) ?? settings;
-  const { merge, email } = sampleMerge(row, db);
+  const { entry, usage, position } = choose(row, db, options.email, options.filter);
   const placeholderUrl = 'https://example.com/p/preview';
   const rendered = renderEmail({
     subject: row.subject,
     previewText: row.preview_text,
     body: row.body,
-    merge,
+    merge: entry.merge,
     sender,
     typeLabel: typeLabel(row.email_type, db),
     urls: { page: placeholderUrl, unsubscribe: `${placeholderUrl}?off=1`, oneClick: `${placeholderUrl}/one-click` },
+    preview: true,
   });
+  const definition = JSON.parse(row.audience) as AudienceDefinition;
+  const labels = new Map(getAppLinks(definition.appId, db).pages.map((page) => [page.key, page.label]));
+  const pageKeys = [...new Set([...Object.keys(entry.merge.pages), ...usage.pages])];
+  const gaps = gapsOf(entry.merge, usage);
   return {
     ...rendered,
     from: sender.fromEmail ? formatFrom(sender) : '',
     replyTo: sender.replyTo,
-    to: email,
+    to: entry.email,
+    recipient: rowOf(entry, usage),
+    position,
+    variables: MERGE_FIELDS.map((key) => ({
+      key,
+      value: (entry.merge.fields[key] ?? '').trim() || null,
+      used: usage.fields.includes(key),
+      fallbacks: usage.fallbacks[key] ?? [],
+    })),
+    pages: pageKeys.map((key) => ({
+      key,
+      label: labels.get(key) ?? key,
+      url: entry.merge.pages[key] ?? null,
+      used: usage.pages.includes(key),
+    })),
+    blankCount: gaps.blank.length + gaps.noLink.length,
   };
 }
 
@@ -616,9 +823,11 @@ export function resetTestLimits(): void {
   testLog.clear();
 }
 
+/** `as` picks whose values the test uses (an email in the audience); it still goes to `to`. */
 export async function sendTest(
   id: string,
   to: unknown,
+  as: unknown = undefined,
   db: Db = getDb(),
 ): Promise<{ id: string; to: string; subject: string }> {
   assertCanSend(db);
@@ -640,7 +849,7 @@ export async function sendTest(
   }
 
   const sender = senderOf(row) ?? settings;
-  const { merge } = sampleMerge(row, db);
+  const { merge } = choose(row, db, as).entry;
   const urls = preferenceUrls({ email: address, typeKey: row.email_type, sourceId: TEST_SOURCE });
   const rendered = renderEmail({
     subject: row.subject,

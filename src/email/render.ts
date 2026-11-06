@@ -51,6 +51,12 @@ export interface RenderInput {
   /** The label of the campaign's email type, e.g. "Product updates". */
   typeLabel: string;
   urls: { unsubscribe: string; oneClick: string; page: string };
+  /**
+   * Dashboard preview only: mark a fallback value in yellow and draw a page
+   * button with no link as a dashed box, so a blank is easy to see. Never set
+   * for an email that is sent.
+   */
+  preview?: boolean;
 }
 
 export interface RenderedEmail {
@@ -114,6 +120,32 @@ export function validateTemplate(subject: string, body: string, pageKeys: string
       );
     }
   }
+}
+
+/** The merge fields a template uses, in subject, preview text, and body, in MERGE_FIELDS order. */
+export function fieldsIn(...templates: string[]): MergeField[] {
+  const used = new Set<MergeField>();
+  for (const template of templates) {
+    for (const match of template.matchAll(TAG)) {
+      const tag = parseTag(match[1]!);
+      if (tag.kind === 'field') used.add(tag.field);
+    }
+  }
+  return MERGE_FIELDS.filter((field) => used.has(field));
+}
+
+/** Every distinct fallback each field has in the templates, e.g. { first_name: ['Hi', 'there'] }. */
+export function fallbacksIn(...templates: string[]): Partial<Record<MergeField, string[]>> {
+  const out: Partial<Record<MergeField, string[]>> = {};
+  for (const template of templates) {
+    for (const match of template.matchAll(TAG)) {
+      const tag = parseTag(match[1]!);
+      if (tag.kind !== 'field' || !tag.fallback) continue;
+      const list = (out[tag.field] ??= []);
+      if (!list.includes(tag.fallback)) list.push(tag.fallback);
+    }
+  }
+  return out;
 }
 
 /** True when the body uses {{first_name}} with no fallback. */
@@ -233,7 +265,21 @@ function inlineText(raw: string): string {
   return out + stripEmphasis(raw.slice(last));
 }
 
-function bodyParts(body: string, merge: MergeValues, sender: Sender): { html: string; text: string } {
+const FALLBACK_MARK = 'background:#fff5d6;color:inherit;border-radius:3px;padding:0 2px';
+
+function deadButtonHtml(label: string): string {
+  return (
+    `<div style="margin:8px 0 16px;border:1px dashed #c9a227;border-radius:6px;line-height:42px;text-align:center;font-size:15px">` +
+    `${escapeHtml(label)} <small style="color:#8a6100">(no link for this store)</small></div>`
+  );
+}
+
+function bodyParts(
+  body: string,
+  merge: MergeValues,
+  sender: Sender,
+  preview = false,
+): { html: string; text: string } {
   const slots: Slot[] = [];
   const hold = (slot: Slot) => `${OPEN}${slots.push(slot) - 1}${CLOSE}`;
 
@@ -250,10 +296,20 @@ function bodyParts(body: string, merge: MergeValues, sender: Sender): { html: st
     const tag = parseTag(inner);
     if (tag.kind === 'field') {
       const value = fieldValue(merge, tag);
-      return hold({ html: escapeHtml(value), text: value });
+      const fellBack = preview && value !== '' && !(merge.fields[tag.field] ?? '').trim();
+      return hold({
+        html: fellBack ? `<mark style="${FALLBACK_MARK}">${escapeHtml(value)}</mark>` : escapeHtml(value),
+        text: value,
+      });
     }
     const url = merge.pages[tag.page] ?? null;
-    if (!url) return hold({ html: escapeHtml(tag.label), text: tag.label });
+    if (!url) {
+      return hold({
+        html: escapeHtml(tag.label),
+        text: tag.label,
+        ...(preview ? { block: deadButtonHtml(tag.label) } : {}),
+      });
+    }
     return hold({
       html: inlineButtonHtml(tag.label, url, sender.buttonColor),
       text: `${tag.label}: ${url}`,
@@ -294,7 +350,7 @@ export function formatFrom(sender: Pick<Sender, 'fromName' | 'fromEmail'>): stri
 export function renderEmail(input: RenderInput): RenderedEmail {
   const subject = mergeLine(input.subject, input.merge);
   const preview = mergeLine(input.previewText, input.merge);
-  const body = bodyParts(input.body, input.merge, input.sender);
+  const body = bodyParts(input.body, input.merge, input.sender, input.preview);
   const appName = (input.merge.fields.app_name ?? '').trim() || 'our app';
   const shopName = (input.merge.fields.shop_name ?? '').trim() || 'your store';
   const because = `You get this email because you use ${appName} on ${shopName}.`;

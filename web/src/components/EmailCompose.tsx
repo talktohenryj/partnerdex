@@ -14,11 +14,13 @@ import {
   type EmailCampaign,
   type EmailSettingsResponse,
   type PrepareResult,
+  type PreviewFilter,
   type RenderedPreview,
   type SavedAudienceSummary,
 } from '../api';
 import { formatDateTime } from '../format';
 import { BlockedBanner, CampaignStatusPill } from './EmailCampaigns';
+import { EmailPreview } from './EmailPreview';
 
 const INSERTS: Array<{ label: string; text: string }> = [
   { label: 'first_name', text: '{{first_name|there}}' },
@@ -220,6 +222,9 @@ export function EmailCompose({ campaignId }: { campaignId: string | null }) {
   const [audiences, setAudiences] = useState<SavedAudienceSummary[]>([]);
   const [settings, setSettings] = useState<EmailSettingsResponse | null>(null);
   const [preview, setPreview] = useState<RenderedPreview | null>(null);
+  // Whose values the preview and the test use; null = the first in the filter.
+  const [previewAs, setPreviewAs] = useState<string | null>(null);
+  const [previewFilter, setPreviewFilter] = useState<PreviewFilter>('all');
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -266,13 +271,16 @@ export function EmailCompose({ campaignId }: { campaignId: string | null }) {
     return () => window.clearInterval(timer);
   }, [campaign]);
 
-  const refreshPreview = useCallback(async (id: string) => {
-    try {
-      setPreview(await renderCampaign(id));
-    } catch (cause) {
-      setError((cause as Error).message);
-    }
-  }, []);
+  const refreshPreview = useCallback(
+    async (id: string) => {
+      try {
+        setPreview(await renderCampaign(id, { email: previewAs, filter: previewFilter }));
+      } catch (cause) {
+        setError((cause as Error).message);
+      }
+    },
+    [previewAs, previewFilter],
+  );
 
   // Live preview: save the draft 400 ms after typing stops, then render it.
   useEffect(() => {
@@ -338,7 +346,7 @@ export function EmailCompose({ campaignId }: { campaignId: string | null }) {
     run('test', async () => {
       if (!campaign) return;
       if (!sameDraft(draft, savedDraft)) adopt(await updateCampaign(campaign.id, draft));
-      const sent = await sendTestEmail(campaign.id, testTo);
+      const sent = await sendTestEmail(campaign.id, testTo, preview?.to);
       setNote(`Test sent to ${sent.to}.`);
     });
 
@@ -483,31 +491,31 @@ export function EmailCompose({ campaignId }: { campaignId: string | null }) {
             >
               {busy === 'prepare' ? 'Preparing…' : 'Review and send…'}
             </button>
+            {campaign && preview ? (
+              <p className="pa-testnote">The test uses the values of {preview.to}, the recipient in the preview.</p>
+            ) : null}
           </div>
           {error ? <p className="channel-status bad">{error}</p> : null}
           {note ? <p className="channel-status good">{note}</p> : null}
         </section>
 
         <section className="card email-card email-preview">
-          <h2 className="card-label">Preview{preview?.to ? ` — ${preview.to}` : ''}</h2>
-          {preview ? (
-            <>
-              <dl className="email-headers">
-                <dt>From</dt>
-                <dd>{preview.from || 'Fill in the sender on the Settings tab'}</dd>
-                {preview.replyTo ? (
-                  <>
-                    <dt>Reply-To</dt>
-                    <dd>{preview.replyTo}</dd>
-                  </>
-                ) : null}
-                <dt>Subject</dt>
-                <dd>{preview.subject}</dd>
-              </dl>
-              <iframe className="email-frame" title="Email preview" sandbox="" srcDoc={preview.html} />
-            </>
+          {preview && campaign ? (
+            <EmailPreview
+              campaignId={campaign.id}
+              preview={preview}
+              filter={previewFilter}
+              onAs={setPreviewAs}
+              onFilter={(next) => {
+                setPreviewFilter(next);
+                setPreviewAs(null);
+              }}
+            />
           ) : (
-            <p className="email-empty">{campaign ? 'Rendering…' : 'Create the draft to see the preview.'}</p>
+            <>
+              <h2 className="card-label">Preview</h2>
+              <p className="email-empty">{campaign ? 'Rendering…' : 'Create the draft to see the preview.'}</p>
+            </>
           )}
         </section>
       </div>

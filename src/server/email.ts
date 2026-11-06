@@ -1,12 +1,14 @@
 import express from 'express';
 import { getAppLinks, saveAppLinks } from '../apps/links.js';
 import {
+  asFilter,
   cancelCampaign,
   createCampaign,
   deleteCampaign,
   getCampaign,
   listCampaigns,
   prepareCampaign,
+  previewRecipients,
   renderPreview,
   sendTest,
   startSend,
@@ -134,14 +136,32 @@ export function emailRouter(): express.Router {
   router.post(
     '/campaigns/:id/render',
     handle((request, response) => {
-      response.json(renderPreview(request.params.id!));
+      const body = bodyOf(request);
+      response.json(renderPreview(request.params.id!, { email: body.email, filter: asFilter(body.filter) }));
+    }),
+  );
+
+  // The "Preview as" picker: the people the campaign would go to, searchable.
+  router.get(
+    '/campaigns/:id/recipients',
+    handle((request, response) => {
+      const pick = (name: string) => (typeof request.query[name] === 'string' ? (request.query[name] as string) : undefined);
+      response.json(
+        previewRecipients(request.params.id!, {
+          q: pick('q'),
+          filter: asFilter(pick('filter')),
+          offset: Number(pick('offset') ?? 0) || 0,
+          limit: Number(pick('limit') ?? 50) || 50,
+        }),
+      );
     }),
   );
 
   router.post(
     '/campaigns/:id/test',
     handle(async (request, response) => {
-      response.json(await sendTest(request.params.id!, bodyOf(request).to));
+      const body = bodyOf(request);
+      response.json(await sendTest(request.params.id!, body.to, body.as));
     }),
   );
 
