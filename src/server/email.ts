@@ -2,7 +2,7 @@ import express from 'express';
 import { getAppLinks, saveAppLinks } from '../apps/links.js';
 import {
   asFilter,
-  asSendFilter,
+  asSendFilters,
   cancelCampaign,
   failureGroups,
   createCampaign,
@@ -207,7 +207,10 @@ export function emailRouter(): express.Router {
     handle((request, response) => {
       response.json(
         listSends(request.params.id!, {
-          status: asSendFilter(request.query.status) ?? 'sent',
+          status: (() => {
+            const filters = asSendFilters(request.query.status);
+            return filters.length ? filters : 'sent';
+          })(),
           q: typeof request.query.q === 'string' ? request.query.q : undefined,
           limit: Number(request.query.limit ?? 50) || 50,
           offset: Number(request.query.offset ?? 0) || 0,

@@ -933,6 +933,8 @@ export interface AppLinks {
 export type CampaignStatus = 'draft' | 'ready' | 'sending' | 'paused' | 'sent' | 'cancelled' | 'failed';
 
 export interface CampaignStats {
+  total: number;
+  queued: number;
   sent: number;
   delivered: number;
   opened: number;
@@ -964,6 +966,8 @@ export interface EmailCampaign {
   /** The send pauses by itself when sent + failed reaches this. */
   pauseAt: number | null;
   stats: CampaignStats;
+  /** Each recipient's final outcome; the parts add up to stats.total. */
+  outcomes: { delivered: number; bounced: number; pending: number; failed: number; skipped: number; queued: number };
   /** Open, click and unsubscribe over delivered; bounce over sent. Null when the base is 0. */
   rates: { open: number | null; click: number | null; unsubscribe: number | null; bounce: number | null };
   /** Set while sending waits for the daily limit or a Resend quota. */
@@ -1134,10 +1138,11 @@ export type SendFilter =
 
 export const fetchSends = (
   id: string,
-  options: { status?: SendFilter; q?: string; limit?: number; offset?: number } = {},
+  options: { status?: SendFilter | SendFilter[]; q?: string; limit?: number; offset?: number } = {},
 ): Promise<{ total: number; rows: SentEmailRow[] }> => {
   const params = new URLSearchParams();
-  if (options.status) params.set('status', options.status);
+  const status = options.status === undefined ? [] : [options.status].flat();
+  if (status.length) params.set('status', status.join(','));
   if (options.q) params.set('q', options.q);
   if (options.limit) params.set('limit', String(options.limit));
   if (options.offset) params.set('offset', String(options.offset));

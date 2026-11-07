@@ -73,6 +73,15 @@ function PreviewModal({ campaignId, email, onClose }: { campaignId: string; emai
   );
 }
 
+function RecipientCell({ row }: { row: SentEmailRow }) {
+  return (
+    <div className="email-recipient">
+      {row.name ? <b>{row.name}</b> : null}
+      <span className={row.name ? 'email-recipient-address' : undefined}>{row.email}</span>
+    </div>
+  );
+}
+
 function SentList({ campaign }: { campaign: EmailCampaign }) {
   const [rows, setRows] = useState<SentEmailRow[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -109,9 +118,7 @@ function SentList({ campaign }: { campaign: EmailCampaign }) {
             {rows.map((row) => (
               <tr key={row.email}>
                 <td>
-                  {row.name ? <b>{row.name}</b> : null}
-                  {row.name ? ' · ' : ''}
-                  {row.email}
+                  <RecipientCell row={row} />
                 </td>
                 <td>{row.shopName ?? '—'}</td>
                 <td>{row.sentAt ? formatDateTime(row.sentAt) : '—'}</td>
@@ -135,38 +142,77 @@ function percent(rate: number | null): string {
   return rate === null ? '—' : `${(rate * 100).toFixed(1)}%`;
 }
 
-function StatTiles({ campaign }: { campaign: EmailCampaign }) {
-  const { stats, rates } = campaign;
-  if (stats.sent === 0) return null;
-  const deliveredRate = stats.sent > 0 ? stats.delivered / stats.sent : null;
-  const tiles: Array<{ label: string; value: number; note: string }> = [
-    { label: 'Sent', value: stats.sent, note: stats.failed ? `${stats.failed.toLocaleString()} failed` : '' },
-    { label: 'Delivered', value: stats.delivered, note: percent(deliveredRate) },
-    { label: 'Opened ≈', value: stats.opened, note: `${percent(rates.open)} · approximate` },
-    { label: 'Clicked', value: stats.clicked, note: percent(rates.click) },
+type Outcome = keyof EmailCampaign['outcomes'];
+
+const OUTCOMES: Array<{ key: Outcome; label: string }> = [
+  { key: 'delivered', label: 'Delivered' },
+  { key: 'pending', label: 'Sent, no result yet' },
+  { key: 'bounced', label: 'Bounced' },
+  { key: 'failed', label: 'Failed' },
+  { key: 'skipped', label: 'Skipped' },
+  { key: 'queued', label: 'Queued' },
+];
+
+function of(part: number, whole: number, base: string): string {
+  return whole > 0 ? `${percent(part / whole)} of ${base}` : '—';
+}
+
+function OutcomeSummary({ campaign }: { campaign: EmailCampaign }) {
+  const { stats, rates, outcomes } = campaign;
+  if (stats.total === 0) return null;
+  // Always show the four end states; show pending and queued only while they hold anyone.
+  const shown = OUTCOMES.filter((entry) => outcomes[entry.key] > 0 || !['pending', 'queued'].includes(entry.key));
+  const label = shown.map((entry) => `${entry.label} ${outcomes[entry.key].toLocaleString()}`).join(', ');
+  const numbers: Array<{ label: string; value: number; note: string }> = [
+    { label: 'Sent', value: stats.sent, note: of(stats.sent, stats.total, stats.total.toLocaleString()) },
+    { label: 'Delivered', value: stats.delivered, note: of(stats.delivered, stats.sent, 'sent') },
+    { label: 'Opened ≈', value: stats.opened, note: `${percent(rates.open)} of delivered` },
+    { label: 'Clicked', value: stats.clicked, note: `${percent(rates.click)} of delivered` },
     {
-      label: 'Bounced',
-      value: stats.bounced,
-      note: `${percent(rates.bounce)}${stats.complained ? ` · ${stats.complained} spam complaint${stats.complained === 1 ? '' : 's'}` : ''}`,
+      label: 'Unsubscribed',
+      value: stats.unsubscribed,
+      note: `${percent(rates.unsubscribe)} · ${stats.complained.toLocaleString()} complaint${stats.complained === 1 ? '' : 's'}`,
     },
-    { label: 'Unsubscribed', value: stats.unsubscribed, note: percent(rates.unsubscribe) },
   ];
   return (
-    <>
-      <div className="stat-row email-stats">
-        {tiles.map((tile) => (
-          <div className="stat" key={tile.label}>
-            <div className="stat-label">{tile.label}</div>
-            <div className="stat-value">{tile.value.toLocaleString()}</div>
-            {tile.note ? <div className="stat-note">{tile.note}</div> : null}
-          </div>
+    <div className="email-outcomes">
+      <h3 className="card-label">What happened to the {stats.total.toLocaleString()}</h3>
+      <div className="email-outcome-bar" role="img" aria-label={label}>
+        {OUTCOMES.filter((entry) => outcomes[entry.key] > 0).map((entry) => (
+          <span
+            key={entry.key}
+            className={`email-outcome-${entry.key}`}
+            style={{ flexGrow: outcomes[entry.key] }}
+            title={`${entry.label}: ${outcomes[entry.key].toLocaleString()}`}
+          />
         ))}
       </div>
-      <p className="email-sub">
-        Opens are approximate: some mail apps load images for privacy, and some block them. Rates are over delivered;
-        bounces are over sent. Delivery events come from the Resend webhook.
-      </p>
-    </>
+      <ul className="email-outcome-legend">
+        {shown.map((entry) => (
+          <li key={entry.key}>
+            <span className={`email-dot email-outcome-${entry.key}`} aria-hidden="true" />
+            {entry.label} <b>{outcomes[entry.key].toLocaleString()}</b>
+          </li>
+        ))}
+      </ul>
+      {stats.sent > 0 ? (
+        <>
+          <div className="email-numbers">
+            {numbers.map((number) => (
+              <div key={number.label}>
+                <div className="stat-label">{number.label}</div>
+                <div className="email-number">{number.value.toLocaleString()}</div>
+                <div className="stat-note">{number.note}</div>
+              </div>
+            ))}
+          </div>
+          <p className="email-sub">
+            Opens are approximate: some mail apps load images for privacy, and some block them. Delivery events come
+            from the Resend webhook.
+          </p>
+        </>
+      ) : null}
+    </div>
   );
 }
 
@@ -302,17 +348,115 @@ function RetryDialog({
   );
 }
 
-const REPORT_FILTERS: Array<{ key: SendFilter; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'delivered', label: 'Delivered' },
-  { key: 'opened', label: 'Opened' },
-  { key: 'clicked', label: 'Clicked' },
-  { key: 'bounced', label: 'Bounced' },
-  { key: 'complained', label: 'Spam complaint' },
-  { key: 'unsubscribed', label: 'Unsubscribed' },
-  { key: 'failed', label: 'Failed' },
-  { key: 'skipped', label: 'Skipped' },
+type StatusKey = Exclude<SendFilter, 'all' | 'queued' | 'sending' | 'sent'>;
+
+const STATUS_GROUPS: Array<{ label: string; items: Array<{ key: StatusKey; label: string; count: (c: EmailCampaign) => number }> }> = [
+  {
+    label: 'Engaged',
+    items: [
+      { key: 'clicked', label: 'Clicked', count: (c) => c.stats.clicked },
+      { key: 'opened', label: 'Opened', count: (c) => c.stats.opened },
+      { key: 'delivered', label: 'Delivered', count: (c) => c.stats.delivered },
+    ],
+  },
+  {
+    label: 'Problems',
+    items: [
+      { key: 'failed', label: 'Failed', count: (c) => c.stats.failed },
+      { key: 'bounced', label: 'Bounced', count: (c) => c.stats.bounced },
+      { key: 'unsubscribed', label: 'Unsubscribed', count: (c) => c.stats.unsubscribed },
+      { key: 'complained', label: 'Spam complaint', count: (c) => c.stats.complained },
+      { key: 'skipped', label: 'Skipped', count: (c) => c.stats.skipped },
+    ],
+  },
 ];
+
+const STATUS_LABEL = Object.fromEntries(
+  STATUS_GROUPS.flatMap((group) => group.items.map((item) => [item.key, item.label])),
+) as Record<StatusKey, string>;
+
+const DOT_FOR: Record<StatusKey, Outcome | 'muted'> = {
+  clicked: 'delivered',
+  opened: 'delivered',
+  delivered: 'delivered',
+  failed: 'failed',
+  bounced: 'bounced',
+  unsubscribed: 'muted',
+  complained: 'muted',
+  skipped: 'skipped',
+};
+
+function rowOutcome(row: SentEmailRow): Outcome | 'muted' {
+  if (row.status === 'failed') return 'failed';
+  if (row.status === 'skipped') return 'skipped';
+  if (row.status !== 'sent') return 'queued';
+  if (row.bouncedAt) return 'bounced';
+  if (row.complainedAt || row.unsubscribedAt) return 'muted';
+  return row.deliveredAt ? 'delivered' : 'pending';
+}
+
+function StatusMenu({
+  campaign,
+  chosen,
+  onChange,
+}: {
+  campaign: EmailCampaign;
+  chosen: StatusKey[];
+  onChange: (next: StatusKey[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: MouseEvent) => {
+      if (box.current && !box.current.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => event.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('mousedown', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [open]);
+
+  const toggle = (key: StatusKey) =>
+    onChange(chosen.includes(key) ? chosen.filter((entry) => entry !== key) : [...chosen, key]);
+
+  return (
+    <div className="email-status" ref={box}>
+      <button type="button" aria-expanded={open} aria-controls="email-status-menu" onClick={() => setOpen(!open)}>
+        Status{chosen.length ? ` · ${chosen.length}` : ''} <span aria-hidden="true">▾</span>
+      </button>
+      {open ? (
+        <div className="email-status-menu" id="email-status-menu">
+          {STATUS_GROUPS.map((group) => (
+            <fieldset key={group.label}>
+              <legend>{group.label}</legend>
+              {group.items.map((item) => {
+                const count = item.count(campaign);
+                return (
+                  <label key={item.key} className={count === 0 && !chosen.includes(item.key) ? 'is-empty' : undefined}>
+                    <input
+                      type="checkbox"
+                      checked={chosen.includes(item.key)}
+                      disabled={count === 0 && !chosen.includes(item.key)}
+                      onChange={() => toggle(item.key)}
+                    />
+                    <span className={`email-dot email-outcome-${DOT_FOR[item.key]}`} aria-hidden="true" />
+                    <span>{item.label}</span>
+                    <b>{count.toLocaleString()}</b>
+                  </label>
+                );
+              })}
+            </fieldset>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function rowResult(row: SentEmailRow): string {
   if (row.status === 'failed') return `Failed${row.error ? ` · ${row.error}` : ''}`;
@@ -330,7 +474,7 @@ function rowResult(row: SentEmailRow): string {
 }
 
 function ReportList({ campaign }: { campaign: EmailCampaign }) {
-  const [filter, setFilter] = useState<SendFilter>('all');
+  const [chosen, setChosen] = useState<StatusKey[]>([]);
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<SentEmailRow[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -339,7 +483,7 @@ function ReportList({ campaign }: { campaign: EmailCampaign }) {
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
-      fetchSends(campaign.id, { status: filter, q: q.trim() || undefined, limit: 100 })
+      fetchSends(campaign.id, { status: chosen.length ? chosen : 'all', q: q.trim() || undefined, limit: 100 })
         .then((result) => {
           if (cancelled) return;
           setRows(result.rows);
@@ -351,23 +495,12 @@ function ReportList({ campaign }: { campaign: EmailCampaign }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [campaign.id, filter, q, campaign.counts.sent, campaign.counts.failed]);
+  }, [campaign.id, chosen, q, campaign.counts.sent, campaign.counts.failed]);
 
   return (
     <div className="email-sent">
       <h3 className="card-label">Recipients</h3>
-      <div className="email-actions email-actions-wrap">
-        {REPORT_FILTERS.map((entry) => (
-          <button
-            key={entry.key}
-            type="button"
-            className={`email-chip${filter === entry.key ? ' on' : ''}`}
-            aria-pressed={filter === entry.key}
-            onClick={() => setFilter(entry.key)}
-          >
-            {entry.label}
-          </button>
-        ))}
+      <div className="email-report-tools">
         <input
           type="search"
           className="email-search"
@@ -376,6 +509,30 @@ function ReportList({ campaign }: { campaign: EmailCampaign }) {
           value={q}
           onChange={(event) => setQ(event.target.value)}
         />
+        <StatusMenu campaign={campaign} chosen={chosen} onChange={setChosen} />
+        {chosen.map((key) => (
+          <span className="email-token" key={key}>
+            <span className={`email-dot email-outcome-${DOT_FOR[key]}`} aria-hidden="true" />
+            {STATUS_LABEL[key]}
+            <button
+              type="button"
+              aria-label={`Remove ${STATUS_LABEL[key]}`}
+              onClick={() => setChosen(chosen.filter((entry) => entry !== key))}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        {chosen.length ? (
+          <button type="button" className="link-button" onClick={() => setChosen([])}>
+            Clear
+          </button>
+        ) : null}
+        {rows ? (
+          <span className="email-report-count">
+            {total.toLocaleString()} of {campaign.stats.total.toLocaleString()}
+          </span>
+        ) : null}
       </div>
       {rows === null ? <p className="email-empty">Loading…</p> : null}
       {rows && rows.length === 0 ? <p className="email-empty">No one matches.</p> : null}
@@ -397,12 +554,13 @@ function ReportList({ campaign }: { campaign: EmailCampaign }) {
               {rows.map((row) => (
                 <tr key={row.email}>
                   <td>
-                    {row.name ? <b>{row.name}</b> : null}
-                    {row.name ? ' · ' : ''}
-                    {row.email}
+                    <RecipientCell row={row} />
                   </td>
                   <td>{row.shopName ?? '—'}</td>
-                  <td>{rowResult(row)}</td>
+                  <td>
+                    <span className={`email-dot email-outcome-${rowOutcome(row)}`} aria-hidden="true" />
+                    {rowResult(row)}
+                  </td>
                   <td>{row.sentAt ? formatDateTime(row.sentAt) : '—'}</td>
                   <td>
                     {row.status === 'sent' ? (
@@ -435,7 +593,6 @@ export function EmailProgress({
   const [next, setNext] = useState<string>('all');
   const [retrying, setRetrying] = useState(false);
   const finished = campaign.status === 'sent' || campaign.status === 'failed' || campaign.status === 'cancelled';
-  const total = campaign.recipientCount || 1;
   const done = campaign.counts.sent + campaign.counts.failed;
   const left = campaign.counts.queued;
   const paused = campaign.status === 'paused';
@@ -486,22 +643,7 @@ export function EmailProgress({
         ) : null}
       </div>
       <WaitingBanner campaign={campaign} />
-      <StatTiles campaign={campaign} />
-      <div
-        className="email-progress"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={campaign.recipientCount}
-        aria-valuenow={campaign.counts.sent}
-        aria-label="Sent"
-      >
-        <span style={{ width: `${Math.min(100, (done / total) * 100)}%` }} />
-      </div>
-      <p>
-        <b>{campaign.counts.sent.toLocaleString()}</b> of {campaign.recipientCount.toLocaleString()} sent ·{' '}
-        {campaign.counts.failed.toLocaleString()} failed · {campaign.counts.skipped.toLocaleString()} skipped
-        {left > 0 ? ` · ${left.toLocaleString()} waiting` : ''}
-      </p>
+      <OutcomeSummary campaign={campaign} />
       {campaign.status === 'sending' ? (
         <p className="email-sub">
           This page updates every 3 seconds. You can leave it; sending goes on.

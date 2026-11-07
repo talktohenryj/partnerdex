@@ -7,6 +7,7 @@ import {
   getCampaign,
   IDEMPOTENCY_WINDOW_ERROR,
   listSends,
+  asSendFilters,
   markResendFailed,
   prepareCampaign,
   cancelCampaign,
@@ -444,7 +445,8 @@ describe('campaign report and history', () => {
     stamp(id, 'unsubscribed_at', 3);
     const campaign = getCampaign(id)!;
     assert.deepEqual(campaign.stats, {
-      sent: 171, delivered: 165, opened: 88, clicked: 40, bounced: 6, complained: 0, unsubscribed: 3, failed: 0, skipped: 0,
+      total: 171, queued: 0, sent: 171, delivered: 165, opened: 88, clicked: 40, bounced: 6, complained: 0, unsubscribed: 3,
+      failed: 0, skipped: 0,
     });
     assert.equal((campaign.rates.click! * 100).toFixed(1), '24.2');
     assert.equal((campaign.rates.open! * 100).toFixed(1), '53.3');
@@ -466,6 +468,55 @@ describe('campaign report and history', () => {
     const search = listSends(id, { status: 'all', q: 'owner003' });
     assert.deepEqual(search.rows.map((row) => row.email), ['owner003@example-shop3.test']);
     assert.equal(listSends(id, { status: 'all', q: '%' }).total, 0);
+  });
+
+  it('stats total equals the outcome segments', async () => {
+    seedOwners(10);
+    const id = await prepared();
+    startSend(id, 10);
+    await drain(() => DAY1);
+    getDb()
+      .prepare(
+        `UPDATE email_sends SET status = 'failed', resend_id = NULL, sent_at = NULL, error = 'Resend: boom'
+          WHERE campaign_id = ? AND email IN (SELECT email FROM email_sends WHERE campaign_id = ? ORDER BY email DESC LIMIT 2)`,
+      )
+      .run(id, id);
+    stamp(id, 'delivered_at', 6);
+    stamp(id, 'opened_at', 2);
+    // One address got delivered and then bounced: it counts once, as bounced.
+    getDb()
+      .prepare(
+        `UPDATE email_sends SET bounced_at = '2026-11-06T16:05:00.000Z'
+          WHERE campaign_id = ? AND email = (SELECT email FROM email_sends WHERE campaign_id = ? AND status = 'sent' ORDER BY email DESC LIMIT 1)`,
+      )
+      .run(id, id);
+    stamp(id, 'bounced_at', 1);
+    const campaign = getCampaign(id)!;
+    assert.deepEqual(campaign.outcomes, { delivered: 5, bounced: 2, pending: 1, failed: 2, skipped: 0, queued: 0 });
+    const sum = Object.values(campaign.outcomes).reduce((total, part) => total + part, 0);
+    assert.equal(sum, campaign.stats.total);
+    assert.equal(campaign.stats.total, 10);
+  });
+
+  it('recipients filter takes a comma list', async () => {
+    seedOwners(6);
+    const id = await prepared();
+    startSend(id, 6);
+    await drain(() => DAY1);
+    getDb()
+      .prepare(
+        `UPDATE email_sends SET status = 'failed', resend_id = NULL, sent_at = NULL, error = 'Resend: boom'
+          WHERE campaign_id = ? AND email IN (SELECT email FROM email_sends WHERE campaign_id = ? ORDER BY email DESC LIMIT 2)`,
+      )
+      .run(id, id);
+    stamp(id, 'bounced_at', 1);
+    stamp(id, 'clicked_at', 1);
+    assert.deepEqual(asSendFilters('failed,bounced,nope'), ['failed', 'bounced']);
+    assert.equal(listSends(id, { status: ['failed', 'bounced'] }).total, 3);
+    assert.equal(listSends(id, { status: ['bounced', 'clicked'] }).total, 1);
+    assert.equal(listSends(id, { status: ['failed'] }).total, 2);
+    assert.equal(listSends(id, { status: ['all', 'failed'] }).total, 6);
+    assert.equal(listSends(id, { status: [] }).total, 6);
   });
 
   it('history newest first', async () => {

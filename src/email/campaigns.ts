@@ -61,6 +61,8 @@ export interface Campaign {
   pauseAt: number | null;
   /** Delivery events from the Resend webhook (or the one-time backfill). */
   stats: CampaignStats;
+  /** Each recipient's final outcome, once: the parts add up to stats.total. */
+  outcomes: CampaignOutcomes;
   /** Open, click and unsubscribe over delivered; bounce over sent. Null when the base is 0. */
   rates: { open: number | null; click: number | null; unsubscribe: number | null; bounce: number | null };
   /** Set while the campaign is sending but the loop waits for a daily limit or a Resend quota. */
@@ -73,6 +75,10 @@ export interface Campaign {
 }
 
 export interface CampaignStats {
+  /** Every recipient row of the campaign. */
+  total: number;
+  /** Queued or in a batch now. */
+  queued: number;
   sent: number;
   delivered: number;
   opened: number;
@@ -82,6 +88,19 @@ export interface CampaignStats {
   unsubscribed: number;
   failed: number;
   skipped: number;
+}
+
+/**
+ * One bucket per recipient. Opened, clicked and unsubscribed are not here:
+ * those people are also delivered. `pending` is sent with no delivery event yet.
+ */
+export interface CampaignOutcomes {
+  delivered: number;
+  bounced: number;
+  pending: number;
+  failed: number;
+  skipped: number;
+  queued: number;
 }
 
 interface CampaignRow {
@@ -161,8 +180,29 @@ function campaignStats(id: string, counts: Record<SendStatus, number>, db: Db): 
               COUNT(bounced_at) AS bounced, COUNT(complained_at) AS complained, COUNT(unsubscribed_at) AS unsubscribed
          FROM email_sends WHERE campaign_id = ?`,
     )
-    .get(id) as Omit<CampaignStats, 'sent' | 'failed' | 'skipped'>;
-  return { sent: counts.sent, ...events, failed: counts.failed, skipped: counts.skipped };
+    .get(id) as Omit<CampaignStats, 'total' | 'queued' | 'sent' | 'failed' | 'skipped'>;
+  const queued = counts.queued + counts.sending;
+  const total = queued + counts.sent + counts.failed + counts.skipped;
+  return { total, queued, sent: counts.sent, ...events, failed: counts.failed, skipped: counts.skipped };
+}
+
+function campaignOutcomes(id: string, counts: Record<SendStatus, number>, db: Db): CampaignOutcomes {
+  const sent = db
+    .prepare(
+      `SELECT COUNT(bounced_at) AS bounced,
+              SUM(CASE WHEN bounced_at IS NULL AND delivered_at IS NOT NULL THEN 1 ELSE 0 END) AS delivered
+         FROM email_sends WHERE campaign_id = ? AND status = 'sent'`,
+    )
+    .get(id) as { bounced: number; delivered: number | null };
+  const delivered = sent.delivered ?? 0;
+  return {
+    delivered,
+    bounced: sent.bounced,
+    pending: counts.sent - delivered - sent.bounced,
+    failed: counts.failed,
+    skipped: counts.skipped,
+    queued: counts.queued + counts.sending,
+  };
 }
 
 function ratio(part: number, whole: number): number | null {
@@ -192,6 +232,7 @@ function toCampaign(row: CampaignRow, db: Db): Campaign {
     counts,
     pauseAt: row.pause_at ?? null,
     stats,
+    outcomes: campaignOutcomes(row.id, counts, db),
     rates: {
       open: ratio(stats.opened, stats.delivered),
       click: ratio(stats.clicked, stats.delivered),
@@ -923,6 +964,15 @@ const EVENT_FILTERS: Partial<Record<SendFilter, string>> = {
   unsubscribed: 'unsubscribed_at',
 };
 
+/** A comma list of filters (`failed,bounced`); unknown names are dropped. */
+export function asSendFilters(value: unknown): SendFilter[] {
+  if (typeof value !== 'string') return [];
+  return value
+    .split(',')
+    .map((part) => asSendFilter(part.trim()))
+    .filter((filter): filter is SendFilter => filter !== null);
+}
+
 export function asSendFilter(value: unknown): SendFilter | null {
   const filters: SendFilter[] = [
     'all', 'queued', 'sending', 'sent', 'failed', 'skipped',
@@ -937,20 +987,27 @@ export function asSendFilter(value: unknown): SendFilter | null {
  */
 export function listSends(
   id: string,
-  options: { status?: SendFilter; q?: string; limit?: number; offset?: number } = {},
+  options: { status?: SendFilter | SendFilter[]; q?: string; limit?: number; offset?: number } = {},
   db: Db = getDb(),
 ): { total: number; rows: SendRow[] } {
   requireRow(id, db);
-  const filter = options.status ?? 'sent';
+  const asked = options.status === undefined ? ['sent' as SendFilter] : [options.status].flat();
+  const filters = asked.includes('all') ? [] : [...new Set(asked)];
   const limit = Math.min(Math.max(Math.trunc(options.limit ?? 50), 1), 200);
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
   const where = ['campaign_id = @id'];
-  const event = EVENT_FILTERS[filter];
-  if (event) where.push(`${event} IS NOT NULL`);
-  else if (filter !== 'all') where.push('status = @status');
+  const statusParams: Record<string, string> = {};
+  const any = filters.map((filter, index) => {
+    const column = EVENT_FILTERS[filter];
+    if (column) return `${column} IS NOT NULL`;
+    statusParams[`status${index}`] = filter;
+    return `status = @status${index}`;
+  });
+  if (any.length) where.push(`(${any.join(' OR ')})`);
+  const event = filters.length === 1 ? EVENT_FILTERS[filters[0]!] : undefined;
   const q = (options.q ?? '').trim().toLowerCase();
   if (q) where.push(`(email LIKE @q ESCAPE '\\' OR LOWER(merge) LIKE @q ESCAPE '\\')`);
-  const params = { id, status: filter, q: `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`, limit, offset };
+  const params = { id, ...statusParams, q: `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`, limit, offset };
   const clause = where.join(' AND ');
   const total = (db.prepare(`SELECT COUNT(*) AS n FROM email_sends WHERE ${clause}`).get(params) as { n: number }).n;
   const rows = db
